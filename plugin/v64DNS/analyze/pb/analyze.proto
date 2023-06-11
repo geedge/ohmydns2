@@ -1,0 +1,20 @@
+syntax="proto3";
+
+package ohmydns2.plugin.v64DNS.analyze;
+option go_package=".;pb";
+
+message DnsChain {
+  string gtype=1;
+  string guri=2;
+  string guser=3;
+  string gpass=4;
+  repeated string data=5;
+}
+
+message result {
+  string res=1;
+}
+
+service GrpcService {
+  rpc AnalyzeService(DnsChain) returns (result);
+}

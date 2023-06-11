@@ -1,0 +1,152 @@
+package v64dns
+
+import (
+	"net"
+	"strconv"
+	"strings"
+
+	"github.com/miekg/dns"
+)
+
+// 判断接收到的域名是否实验可用，0为正常，1代表非实验需要，2代表可能是QName最小化的请求
+func (v V64dns) VaildRequest(d string) int {
+	//获取到每一级域名的字符串
+	ds := strings.Split(d, ".")
+	//判断是否为目标域名
+	if strings.Contains(d, v.zone) {
+		//判断是否有解析进度,含有c且长度为2认为存在标识
+		if strings.Contains(ds[0], "c") && len(ds[0]) == 2 {
+			p, err := strconv.Atoi(strings.Split(ds[0], "")[1])
+			if err != nil {
+				print(err)
+				return 1
+			}
+			//长度也一致
+			if p == len(ds)-5 {
+				return 0
+			}
+		}
+		//不存在解析进度，则可能为Qname最小化的请求，返回
+	}
+	return 1
+}
+
+// AuthInfo
+//
+//	@Description: 添加权威服务器的授权信息
+//	@receiver v
+//	@param d dns响应
+//	@param iptype IP类型，0代表v6，1代表v4
+//	@return *dns.Msg
+//	@return error
+func (v *V64dns) AuthInfo(d *dns.Msg, iptype int) (*dns.Msg, error) {
+	rr := new(dns.NS)
+	rr.Hdr.Class = dns.ClassINET
+	rr.Hdr.Ttl = 3600
+	rr.Hdr.Rrtype = dns.TypeNS
+
+	if iptype == 0 {
+		rr.Hdr.Name = v.p.v6domain
+		rr.Ns = v.ipv6NS
+	} else {
+		rr.Hdr.Name = v.p.v4domain
+		rr.Ns = v.ipv4NS
+	}
+	d.Ns = append(d.Ns, rr)
+	return d, nil
+}
+
+// AdditionalInfo
+//
+//	@Description: 添加胶水记录
+//	@receiver v
+//	@param d dns响应
+//	@param iptype IP类型，0代表v6，1代表v4
+//	@return *dns.Msg
+//	@return error
+func (v *V64dns) AdditionalInfo(d *dns.Msg, iptype int) (*dns.Msg, error) {
+	// 根据不同的NS返回额外信息
+	if iptype == 0 {
+		dnsadd := new(dns.AAAA)
+		dnsadd.Hdr.Rrtype = dns.TypeAAAA
+		a, _, _ := net.ParseCIDR(v.V6NSAddr + "/64")
+		dnsadd.AAAA = a
+		dnsadd.Hdr.Class = dns.ClassINET
+		dnsadd.Hdr.Ttl = 3600
+		d.Extra = append(d.Extra, dnsadd)
+	} else {
+		dnsadd := new(dns.A)
+		dnsadd.Hdr.Rrtype = dns.TypeA
+		a, _, _ := net.ParseCIDR(v.V4NSAddr + "/24")
+		dnsadd.A = a
+		dnsadd.Hdr.Class = dns.ClassINET
+		dnsadd.Hdr.Ttl = 3600
+		d.Extra = append(d.Extra, dnsadd)
+	}
+	return d, nil
+}
+
+// IPchain2Str
+//
+//	@Description: 将IP链转为文本描述，格式为ip1+ip2+ip3
+//	@receiver e
+//	@return string
+func (e expobject) IPchain2Str() []string {
+	s := []string{}
+	for _, ip := range e.chain {
+		s = append(s, ip.String())
+	}
+	return s
+}
+
+// 根据各级域名特征判断其类型，0为zone，1为水印部分，2为v4/v6子域名，3为随机数，4为进度标识，5为实验对象
+func (v V64dns) MatchType(s string) int {
+	if strings.Contains(s, "rip") {
+		return 5
+	}
+	if strings.Contains(s, "-") {
+		return 1
+	}
+	if s == v.ipv4NS || s == v.ipv6NS {
+		return 2
+	}
+	if len(s) == 2 && string(s[1]) == "c" {
+		return 4
+	}
+	for _, i := range strings.Split(v.zone, ".") {
+		if s == i {
+			return 0
+		}
+	}
+	return 3
+}
+
+func changeSubDomain(s string) string {
+	switch s {
+	case "v4":
+		return "v6"
+	case "v6":
+		return "v4"
+	default:
+		panic("子域名错误！")
+	}
+}
+
+// 修改进度标识
+func nextProgress(s string) string {
+	n := int(s[1])
+	n = n + 1
+	return string(s[0]) + strconv.Itoa(n)
+}
+
+// 封装函数，同时添加权威信息和胶水记录，根据子域名切换
+func (v V64dns) SetAuthAdd(res *dns.Msg, subdomain string) *dns.Msg {
+	if subdomain == v.p.v6subdomain {
+		res, _ = v.AdditionalInfo(res, v6)
+		res, _ = v.AuthInfo(res, v6)
+	} else {
+		res, _ = v.AdditionalInfo(res, v4)
+		res, _ = v.AuthInfo(res, v4)
+	}
+	return res
+}
