@@ -17,10 +17,10 @@ func (pl ProberList) GetNum() int {
 }
 
 // 增加一个探测器,并返回对应的pid
-func (pl ProberList) AddProber(arg map[string]string) int {
+func (pl ProberList) AddProber(arg map[string][]string) int {
 	t := time.Now().Unix()
 	p := NewProber()
-
+	p.SetArg(arg)
 	p.pid = int(t)
 	pl.pl[int(t)] = p
 	return int(t)
@@ -57,7 +57,7 @@ func (p *Prober) SetArg(arg map[string][]string) {
 
 // 探测代码
 func (p *Prober) Start() error {
-
+	return nil
 }
 
 func (p *Prober) Stop() error {
