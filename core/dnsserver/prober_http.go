@@ -124,9 +124,15 @@ func (p *ProberHTTP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// act: res代表获取当前所有Prober状态，new代表新建Prober
 	// ptype: 探针类型，v64代表IPv4-IPv6关联发现的探针
 	// prange: 探测范围，默认全局，
-	if param["act"][0] == "new" {
-		// 添加一个探测器并启动它
-		proberlist.AddProber(param)
+	if v, ok := param["act"]; ok {
+		if v[0] == "new" {
+			// 添加一个探测器并启动它
+			proberlist.AddProber(param)
+		} else {
+			// 查询所有探测器状态
+		}
+	} else {
+		// 不含有act参数，默认为查询
 	}
 
 	// TODO:设定响应头部

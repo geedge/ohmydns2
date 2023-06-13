@@ -17,13 +17,18 @@ func (pl ProberList) GetNum() int {
 }
 
 // 增加一个探测器,并返回对应的pid
-func (pl ProberList) AddProber(arg map[string][]string) int {
+func (pl ProberList) AddProber(arg map[string][]string) error {
 	t := time.Now().Unix()
 	p := NewProber()
 	p.SetArg(arg)
 	p.pid = int(t)
 	pl.pl[int(t)] = p
-	return int(t)
+	return nil
+}
+
+// 列举所有探测器信息
+func (pl ProberList) ListAllProber() (int, map[int]*Prober, error) {
+	return pl.GetNum(), pl.pl, nil
 }
 
 func (pl ProberList) DeleteProber(pid int) error {
@@ -51,8 +56,18 @@ func NewProber() *Prober {
 
 // TODO:设定prober
 func (p *Prober) SetArg(arg map[string][]string) {
-	p.Prange = arg["range"]
-	p.Ptype = arg["ptype"][0]
+	if v, ok := arg[prange]; ok {
+		p.Prange = v
+	} else {
+		// 默认全网探测
+		p.Prange[0] = defaultPrange
+	}
+	if v, ok := arg[ptype]; ok {
+		p.Ptype = v[0]
+	} else {
+		// 默认v64 CNAME关联
+		p.Ptype = defaultPtype
+	}
 }
 
 // 探测代码
