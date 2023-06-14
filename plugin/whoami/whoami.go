@@ -2,17 +2,21 @@ package whoami
 
 import (
 	"context"
+	"github.com/miekg/dns"
 	"net"
 	"ohmydns2/plugin/pkg/request"
 	"strconv"
-
-	"github.com/miekg/dns"
 )
 
+const name = "whoami"
+
+// Whoami is a plugin that returns your IP address, port and the protocol used for connecting
+// to CoreDNS.
 type Whoami struct{}
 
+// ServeDNS implements the plugin.Handler interface.
 func (wh Whoami) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
-	state := request.Request{Req: r, W: w}
+	state := request.Request{W: w, Req: r}
 
 	a := new(dns.Msg)
 	a.SetReply(r)
@@ -23,18 +27,17 @@ func (wh Whoami) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg)
 
 	switch state.Family() {
 	case 1:
-		rr := new(dns.A)
-		rr.Hdr = dns.RR_Header{Name: state.QName(), Rrtype: dns.TypeA, Class: state.QClass()}
-		rr.A = net.ParseIP(ip)
+		rr = new(dns.A)
+		rr.(*dns.A).Hdr = dns.RR_Header{Name: state.QName(), Rrtype: dns.TypeA, Class: state.QClass()}
+		rr.(*dns.A).A = net.ParseIP(ip).To4()
 	case 2:
-		rr := new(dns.AAAA)
-		rr.Hdr = dns.RR_Header{Name: state.QName(), Rrtype: dns.TypeAAAA, Class: state.QClass()}
-		rr.AAAA = net.ParseIP(ip)
+		rr = new(dns.AAAA)
+		rr.(*dns.AAAA).Hdr = dns.RR_Header{Name: state.QName(), Rrtype: dns.TypeAAAA, Class: state.QClass()}
+		rr.(*dns.AAAA).AAAA = net.ParseIP(ip)
 	}
 
 	srv := new(dns.SRV)
 	srv.Hdr = dns.RR_Header{Name: "_" + state.Proto() + "." + state.QName(), Rrtype: dns.TypeSRV, Class: state.QClass()}
-	// 只请求根的特殊情况
 	if state.QName() == "." {
 		srv.Hdr.Name = "_" + state.Proto() + state.QName()
 	}
@@ -49,8 +52,5 @@ func (wh Whoami) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg)
 	return 0, nil
 }
 
-func (wh Whoami) Name() string {
-	return name
-}
-
-const name = "whoami"
+// Name implements the Handler interface.
+func (wh Whoami) Name() string { return name }

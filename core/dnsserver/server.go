@@ -3,6 +3,8 @@ package dnsserver
 import (
 	"context"
 	"fmt"
+	"github.com/coredns/caddy"
+	"github.com/miekg/dns"
 	ot "github.com/opentracing/opentracing-go"
 	"net"
 	"ohmydns2/plugin"
@@ -19,11 +21,13 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/coredns/caddy"
-	"github.com/miekg/dns"
 )
 
+// Server represents an instance of a server, which serves
+// DNS requests at a particular address (host and port). A
+// server is capable of serving numerous zones on
+// the same address and the listener may be stopped for
+// graceful termination (POSIX only).
 type Server struct {
 	Addr string // Address we listen on
 
@@ -43,17 +47,6 @@ type Server struct {
 
 	tsigSecret map[string]string
 }
-
-type (
-	// Key is the context key for the current server added to the context.
-	Key struct{}
-
-	// LoopKey is the context key to detect server wide loops.
-	LoopKey struct{}
-
-	// ViewKey is the context key for the current view, if defined
-	ViewKey struct{}
-)
 
 // MetadataCollector is a plugin that can retrieve metadata functions from all metadata providing plugins
 type MetadataCollector interface {
@@ -195,18 +188,19 @@ func (s *Server) Listen() (net.Listener, error) {
 	return l, nil
 }
 
+// WrapListener Listen implements caddy.GracefulServer interface.
+func (s *Server) WrapListener(ln net.Listener) net.Listener {
+	return ln
+}
+
 // ListenPacket implements caddy.UDPServer interface.
 func (s *Server) ListenPacket() (net.PacketConn, error) {
 	p, err := reuseport.ListenPacket("udp", s.Addr[len(transport.DNS+"://"):])
 	if err != nil {
 		return nil, err
 	}
-	return p, nil
-}
 
-// WrapListener Listen implements caddy.GracefulServer interface.
-func (s *Server) WrapListener(ln net.Listener) net.Listener {
-	return ln
+	return p, nil
 }
 
 // Stop stops the server. It blocks until the server is
@@ -245,10 +239,8 @@ func (s *Server) Stop() (err error) {
 	return
 }
 
-// Address implement caddy.GracefulServer.
-func (s *Server) Address() string {
-	return s.Addr
-}
+// Address together with Stop() implement caddy.GracefulServer.
+func (s *Server) Address() string { return s.Addr }
 
 // ServeDNS is the entry point for every request to the address that
 // is bound to. It acts as a multiplexer for the requests zonename as
@@ -379,46 +371,6 @@ func (s *Server) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg)
 	errorAndMetricsFunc(s.Addr, w, r, dns.RcodeRefused)
 }
 
-const (
-	tcp = 0
-	udp = 1
-
-	tcpMaxQueries = -1
-)
-
-// EnableChaos is a map with plugin names for which we should open CH class queries as we block these by default.
-var EnableChaos = map[string]struct{}{
-	"chaos":   {},
-	"forward": {},
-	"proxy":   {},
-}
-
-// Quiet 模式在初始化时将不显示任何内容
-var Quiet bool
-
-// errorFunc responds to an DNS request with an error.
-func errorFunc(server string, w dns.ResponseWriter, r *dns.Msg, rc int) {
-	state := request.Request{W: w, Req: r}
-
-	answer := new(dns.Msg)
-	answer.SetRcode(r, rc)
-	state.SizeAndDo(answer)
-
-	w.WriteMsg(answer)
-}
-
-func errorAndMetricsFunc(server string, w dns.ResponseWriter, r *dns.Msg, rc int) {
-	state := request.Request{W: w, Req: r}
-
-	answer := new(dns.Msg)
-	answer.SetRcode(r, rc)
-	state.SizeAndDo(answer)
-
-	vars.Report(server, state, vars.Dropped, "", rcode.ToString(rc), "" /* plugin */, answer.Len(), time.Now())
-
-	w.WriteMsg(answer)
-}
-
 // passAllFilterFuncs returns true if all filter funcs evaluate to true for the given request
 func passAllFilterFuncs(ctx context.Context, filterFuncs []FilterFunc, req *request.Request) bool {
 	for _, ff := range filterFuncs {
@@ -450,3 +402,54 @@ func (s *Server) Tracer() ot.Tracer {
 
 	return s.trace.Tracer()
 }
+
+// errorFunc responds to an DNS request with an error.
+func errorFunc(server string, w dns.ResponseWriter, r *dns.Msg, rc int) {
+	state := request.Request{W: w, Req: r}
+
+	answer := new(dns.Msg)
+	answer.SetRcode(r, rc)
+	state.SizeAndDo(answer)
+
+	w.WriteMsg(answer)
+}
+
+func errorAndMetricsFunc(server string, w dns.ResponseWriter, r *dns.Msg, rc int) {
+	state := request.Request{W: w, Req: r}
+
+	answer := new(dns.Msg)
+	answer.SetRcode(r, rc)
+	state.SizeAndDo(answer)
+
+	vars.Report(server, state, vars.Dropped, "", rcode.ToString(rc), "" /* plugin */, answer.Len(), time.Now())
+
+	w.WriteMsg(answer)
+}
+
+const (
+	tcp = 0
+	udp = 1
+
+	tcpMaxQueries = -1
+)
+
+type (
+	// Key is the context key for the current server added to the context.
+	Key struct{}
+
+	// LoopKey is the context key to detect server wide loops.
+	LoopKey struct{}
+
+	// ViewKey is the context key for the current view, if defined
+	ViewKey struct{}
+)
+
+// EnableChaos is a map with plugin names for which we should open CH class queries as we block these by default.
+var EnableChaos = map[string]struct{}{
+	"chaos":   {},
+	"forward": {},
+	"proxy":   {},
+}
+
+// Quiet mode will not show any informative output on initialization.
+var Quiet bool

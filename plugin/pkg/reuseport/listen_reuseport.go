@@ -2,25 +2,8 @@ package reuseport
 
 import (
 	"context"
-	"golang.org/x/sys/unix"
 	"net"
-	"ohmydns2/plugin/pkg/log"
-	"runtime"
-	"syscall"
 )
-
-func control(network, address string, c syscall.RawConn) error {
-	if runtime.GOOS == "linux" {
-		// *unix system
-		c.Control(func(fd uintptr) {
-			if err := unix.SetsockoptInt(int(fd), unix.SOL_SOCKET, unix.SO_REUSEPORT, 1); err != nil {
-				log.Warningf("Failed to set SO_REUSEPORT on socket: %s", err)
-			}
-		})
-	}
-
-	return nil
-}
 
 // Listen announces on the local network address. See net.Listen for more information.
 // If SO_REUSEPORT is available it will be set on the socket.
