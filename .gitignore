@@ -106,8 +106,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# C extensions
-*.so
+
 
 # Distribution / packaging
 .Python
@@ -265,3 +264,5 @@ cython_debug/
 
 /plugin/v64dns/data/
 .idea
+/go_build_ohmydns2_linux
+/bin/
