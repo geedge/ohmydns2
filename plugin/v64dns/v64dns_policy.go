@@ -225,12 +225,10 @@ func (v V64dns) ResponseCNAME(msg *dns.Msg, sip net.IP) *dns.Msg {
 	// 响应内容
 	answer.Target = prog + "." + expid + "." + maskPart + "." + ran + "." + subdomain + "." + zone
 
-	res := msg.SetReply(msg)
-	res = v.SetAuthAdd(res, subdomain)
+	msg = v.SetAuthAdd(msg, subdomain)
+	msg.Answer = append(msg.Answer, answer)
 
-	res.Answer = append(res.Answer, answer)
-
-	return res
+	return msg
 }
 
 const (
