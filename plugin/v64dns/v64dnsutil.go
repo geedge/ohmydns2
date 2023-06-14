@@ -22,11 +22,12 @@ func (v V64dns) VaildRequest(d string) int {
 				return 1
 			}
 			//长度也一致
-			if p == len(ds)-5 {
+			if p == len(ds)-6 {
 				return 0
 			}
 		}
-		//不存在解析进度，则可能为Qname最小化的请求，返回
+		//不存在解析进度，则可能为Qname最小化的请求，返回2
+		return 2
 	}
 	return 1
 }
@@ -41,9 +42,7 @@ func (v V64dns) VaildRequest(d string) int {
 //	@return error
 func (v *V64dns) AuthInfo(d *dns.Msg, iptype int) (*dns.Msg, error) {
 	rr := new(dns.NS)
-	rr.Hdr.Class = dns.ClassINET
-	rr.Hdr.Ttl = 3600
-	rr.Hdr.Rrtype = dns.TypeNS
+	rr.Hdr = dns.RR_Header{Class: dns.ClassINET, Ttl: 3600, Rrtype: dns.TypeNS}
 
 	if iptype == 0 {
 		rr.Hdr.Name = v.p.v6domain
@@ -68,19 +67,15 @@ func (v *V64dns) AdditionalInfo(d *dns.Msg, iptype int) (*dns.Msg, error) {
 	// 根据不同的NS返回额外信息
 	if iptype == 0 {
 		dnsadd := new(dns.AAAA)
-		dnsadd.Hdr.Rrtype = dns.TypeAAAA
+		dnsadd.Hdr = dns.RR_Header{Name: v.ipv6NS, Ttl: 3600, Class: dns.ClassINET, Rrtype: dns.TypeAAAA}
 		a, _, _ := net.ParseCIDR(v.V6NSAddr + "/64")
-		dnsadd.AAAA = a
-		dnsadd.Hdr.Class = dns.ClassINET
-		dnsadd.Hdr.Ttl = 3600
+		dnsadd.AAAA = a.To16()
 		d.Extra = append(d.Extra, dnsadd)
 	} else {
 		dnsadd := new(dns.A)
-		dnsadd.Hdr.Rrtype = dns.TypeA
+		dnsadd.Hdr = dns.RR_Header{Name: v.ipv4NS, Ttl: 3600, Class: dns.ClassINET, Rrtype: dns.TypeA}
 		a, _, _ := net.ParseCIDR(v.V4NSAddr + "/24")
-		dnsadd.A = a
-		dnsadd.Hdr.Class = dns.ClassINET
-		dnsadd.Hdr.Ttl = 3600
+		dnsadd.A = a.To4()
 		d.Extra = append(d.Extra, dnsadd)
 	}
 	return d, nil
@@ -107,10 +102,10 @@ func (v V64dns) MatchType(s string) int {
 	if strings.Contains(s, "-") {
 		return 1
 	}
-	if s == v.ipv4NS || s == v.ipv6NS {
+	if s == v.p.v4subdomain || s == v.p.v6subdomain {
 		return 2
 	}
-	if len(s) == 2 && string(s[1]) == "c" {
+	if len(s) == 2 && string(s[0]) == "c" {
 		return 4
 	}
 	for _, i := range strings.Split(v.zone, ".") {
@@ -134,7 +129,7 @@ func changeSubDomain(s string) string {
 
 // 修改进度标识
 func nextProgress(s string) string {
-	n := int(s[1])
+	n, _ := strconv.Atoi(string(s[1]))
 	n = n + 1
 	return string(s[0]) + strconv.Itoa(n)
 }

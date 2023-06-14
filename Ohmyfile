@@ -1,6 +1,11 @@
 .:1153 {
     debug
-    whoami
+    v64dns test.com {
+        v4ns ns4 1.1.1.1
+        v6ns ns6 2001::1
+        chain v4 v6
+        ip-embed
+    }
 }
 
 

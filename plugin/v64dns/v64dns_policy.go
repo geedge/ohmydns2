@@ -42,9 +42,11 @@ func (e expobject) Stop(a analyze.Analyzer) {
 	for {
 		<-timeTicker.C
 		i--
-		if i == 0 {
-			a.AnalyzeChain(e.chain)
+		// 计时结束或者完成本次实验之后停止
+		if i == 0 || e.isAll {
 			el.c <- e.eid
+			a.AnalyzeChain(e.chain)
+
 			break
 		}
 	}
@@ -61,7 +63,15 @@ type explist struct {
 	c chan string
 }
 
-var el explist
+var el = NewExpList()
+
+// 为explist创建空间
+func NewExpList() *explist {
+	el := new(explist)
+	el.c = make(chan string, 5)
+	el.l = make(map[string]expobject)
+	return el
+}
 
 // 持续监听管道信息，删除对应eid
 func (el *explist) Stop() {
@@ -73,17 +83,40 @@ func (el *explist) Stop() {
 	}
 }
 
-func (v V64dns) ResponseHandler(msg *dns.Msg, sip net.IP) *dns.Msg {
-	// 监控停止信号
-	go el.Stop()
+// 增加实验对象
+func (el *explist) Add(eid string, sip net.IP) {
+	el.m.Lock()
+	n := expobject{
+		eid:      "",
+		interval: interval,
+		isAll:    false,
+		progress: 1,
+		chain:    []net.IP{sip},
+	}
+	el.l[eid] = n
+	el.m.Unlock()
+}
+
+func (v V64dns) ResponseHandler(msg *dns.Msg, sip net.IP, v64r v64Request) *dns.Msg {
 	switch msg.Question[0].Qtype {
-	case dns.TypeTXT:
-		step := strings.Split(msg.Question[0].Name, ".")[0][1]
-		if int(step) < v.p.maxLen {
-			// 未到达最后一步
-			return v.ResponseCNAME(msg, sip)
+	case dns.TypeTXT, dns.TypeCNAME:
+		if eo, ok := el.l[v64r.eid]; ok {
+			//	存在该实验id
+			step := strings.Split(msg.Question[0].Name, ".")[0][1]
+			if int(step) < v.p.maxLen {
+				eo.Addchain(sip)
+				eo.AddProgress()
+				// 未到达最后一步
+				return v.ResponseCNAME(msg, sip)
+			}
+			// 到达最后一步
+			eo.isAll = true
+			return v.ResponseTXT(msg)
 		}
-		return v.ResponseTXT(msg)
+		//不存在，则认为是新到来的
+		el.Add(v64r.eid, sip)
+		return v.ResponseCNAME(msg, sip)
+
 	case dns.TypeNS:
 		return v.ResponseNS(msg)
 	default:
@@ -169,36 +202,26 @@ func (v V64dns) ResponseCNAME(msg *dns.Msg, sip net.IP) *dns.Msg {
 			subdomain = changeSubDomain(qs)
 		case 5:
 			expid = qs
-			e, ok := el.l[expid]
-			// 不存在则新建expobject对象
-			if !ok {
-				e := expobject{
-					eid:      expid,
-					interval: 20,
-					isAll:    false,
-					progress: 1,
-					chain:    []net.IP{},
-				}
-				e.Addchain(sip)
-				el.l[expid] = e
-				go e.Stop(v.a)
-			}
-			e.AddProgress()
-			e.Addchain(sip)
 		case 4:
 			prog = nextProgress(qs)
 		case 3:
 			ran = qs
 		default:
-			zone = zone + qs + "."
+			if qs != "" {
+				zone = zone + qs + "."
+			}
+
 		}
 	}
-	maskPart += sip.String()
+	maskPart = maskPart + strings.ReplaceAll(sip.String(), ".", "-")
 	answer := new(dns.CNAME)
-	answer.Hdr.Name = qname
-	answer.Hdr.Class = dns.ClassINET
-	answer.Hdr.Ttl = 1
-	answer.Hdr.Rrtype = dns.TypeCNAME
+	answer.Hdr = dns.RR_Header{
+		Name:   qname,
+		Rrtype: dns.TypeCNAME,
+		Class:  dns.ClassINET,
+		Ttl:    1,
+	}
+
 	// 响应内容
 	answer.Target = prog + "." + expid + "." + maskPart + "." + ran + "." + subdomain + "." + zone
 
@@ -211,6 +234,7 @@ func (v V64dns) ResponseCNAME(msg *dns.Msg, sip net.IP) *dns.Msg {
 }
 
 const (
-	v6 = 0
-	v4 = 1
+	v6       = 0
+	v4       = 1
+	interval = 20
 )

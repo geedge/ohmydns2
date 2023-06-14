@@ -27,6 +27,7 @@ func setup(c *caddy.Controller) error {
 // 解析参数
 func parseArg(c *caddy.Controller) (*V64dns, error) {
 	v := new(V64dns)
+
 	for c.Next() {
 		arg := c.RemainingArgs()
 		v.zone = plugin.OriginsFromArgsOrServerBlock(arg, c.ServerBlockKeys)[0]
@@ -57,6 +58,8 @@ func parseArg(c *caddy.Controller) (*V64dns, error) {
 				}
 				v.p.v4domain = args[0] + "." + v.zone
 				v.p.v6domain = args[1] + "." + v.zone
+				v.p.v6subdomain = args[1]
+				v.p.v4subdomain = args[0]
 			case "ip-embed":
 				v.p.ipEmbed = true
 			case "chain-mlen":
@@ -85,7 +88,9 @@ func parseArg(c *caddy.Controller) (*V64dns, error) {
 		}
 		break
 	}
+	// 监控停止信号
+	go el.Stop()
 	return v, nil
 }
 
-var log = olog.NewWithPlugin("v64DNS")
+var log = olog.NewWithPlugin("v64dns")
