@@ -35,8 +35,8 @@ func startUpZones(protocol, addr string, zones map[string][]*Config) string {
 	sort.Strings(keys)
 
 	for _, zone := range keys {
-		if strings.HasPrefix(zone, "http") {
-			s += fmt.Sprintln("一个探测器工作在" + protocol + zone + ":" + transport.PHTTPPort)
+		if strings.HasPrefix(zone, "prober") {
+			s += fmt.Sprintln("探测服务启动，访问路径为" + transport.PROBERPTO + "://" + proberurl + ":" + transport.PHTTPPort + proberPath)
 			continue
 		}
 		if !checkZoneSyntax(zone) {

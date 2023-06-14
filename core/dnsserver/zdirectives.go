@@ -16,5 +16,6 @@ var Directives = []string{
 	"prometheus",
 	"forward",
 	"metadata",
-	"v64DNS",
+	"v64dns",
+	"whoami",
 }

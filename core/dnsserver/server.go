@@ -2,6 +2,8 @@ package dnsserver
 
 import (
 	"context"
+	"fmt"
+	ot "github.com/opentracing/opentracing-go"
 	"net"
 	"ohmydns2/plugin"
 	"ohmydns2/plugin/pkg/edns"
@@ -425,4 +427,26 @@ func passAllFilterFuncs(ctx context.Context, filterFuncs []FilterFunc, req *requ
 		}
 	}
 	return true
+}
+
+// OnStartupComplete lists the sites served by this server
+// and any relevant information, assuming Quiet is false.
+func (s *Server) OnStartupComplete() {
+	if Quiet {
+		return
+	}
+
+	out := startUpZones("", s.Addr, s.zones)
+	if out != "" {
+		fmt.Print(out)
+	}
+}
+
+// Tracer returns the tracer in the server if defined.
+func (s *Server) Tracer() ot.Tracer {
+	if s.trace == nil {
+		return nil
+	}
+
+	return s.trace.Tracer()
 }

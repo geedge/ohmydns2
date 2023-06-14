@@ -2,7 +2,7 @@ package v64dns
 
 import (
 	"net"
-	"ohmydns2/plugin/v64DNS/analyze"
+	"ohmydns2/plugin/v64dns/analyze"
 	"strings"
 	"sync"
 	"time"

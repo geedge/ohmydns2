@@ -6,8 +6,8 @@ import (
 	stdlog "log"
 	"net"
 	"net/http"
+	"ohmydns2/plugin/pkg/doh"
 	ohttp "ohmydns2/plugin/pkg/http"
-	oprober "ohmydns2/plugin/pkg/prober"
 	"ohmydns2/plugin/pkg/reuseport"
 	"ohmydns2/plugin/pkg/transport"
 	"ohmydns2/plugin/prometheus/vars"
@@ -17,8 +17,13 @@ import (
 )
 
 const proberPath = "/prober"
+const proberurl = "localhost"
 
-var proberlist oprober.ProberList
+type ProberWriter struct {
+	laddr   net.Addr
+	raddr   net.Addr
+	request http.Request
+}
 
 type ProberHTTP struct {
 	*Server
@@ -124,22 +129,39 @@ func (p *ProberHTTP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// act: res代表获取当前所有Prober状态，new代表新建Prober
 	// ptype: 探针类型，v64代表IPv4-IPv6关联发现的探针
 	// prange: 探测范围，默认全局，
-	if v, ok := param["act"]; ok {
-		if v[0] == "new" {
-			// 添加一个探测器并启动它
-			proberlist.AddProber(param)
-		} else {
-			// 查询所有探测器状态
-		}
+	if v, ok := param["act"]; ok && v[0] == "new" {
+		//TODO:新建探测器
 	} else {
-		// 不含有act参数，默认为查询
+		//TODO:展示当前运行探测器
 	}
 
-	// TODO:设定响应头部
+	// We just call the normal chain handler - all error handling is done there.
+	// We should expect a packet to be returned that we can send to the client.
+	//ctx := context.WithValue(context.Background(), Key{}, p.Server)
+	//ctx = context.WithValue(ctx, LoopKey{}, 0)
+	//ctx = context.WithValue(ctx, HTTPRequestKey{}, r)
+	////p.ServeDNS(ctx, dw, msg)
+	//
+	//// See section 4.2.1 of RFC 8484.
+	//// We are using code 500 to indicate an unexpected situation when the chain
+	//// handler has not provided any response message.
+	//if dw.Msg == nil {
+	//	http.Error(w, "No response", http.StatusInternalServerError)
+	//	p.countResponse(http.StatusInternalServerError)
+	//	return
+	//}
+	//
+	//buf, _ := dw.Msg.Pack()
+	//
+	//mt, _ := response.Typify(dw.Msg, time.Now().UTC())
+	//age := dnsutil.MinimalTTL(dw.Msg, mt)
+	buf := []byte("test")
+	w.Header().Set("Content-Type", doh.MimeType)
+	w.Header().Set("Content-Length", strconv.Itoa(len(buf)))
 	w.WriteHeader(http.StatusOK)
 	p.countResponse(http.StatusOK)
 
-	w.Write([]byte("ok"))
+	w.Write(buf)
 }
 
 func (p *ProberHTTP) countResponse(status int) {

@@ -4,7 +4,7 @@ import (
 	"context"
 	"net"
 	"ohmydns2/plugin/pkg/request"
-	"ohmydns2/plugin/v64DNS/analyze"
+	"ohmydns2/plugin/v64dns/analyze"
 
 	"github.com/miekg/dns"
 )

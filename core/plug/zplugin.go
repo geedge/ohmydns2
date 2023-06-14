@@ -10,5 +10,6 @@ import (
 	_ "ohmydns2/plugin/log"
 	_ "ohmydns2/plugin/metadata"
 	_ "ohmydns2/plugin/prometheus"
-	_ "ohmydns2/plugin/v64DNS"
+	_ "ohmydns2/plugin/v64dns"
+	_ "ohmydns2/plugin/whoami"
 )

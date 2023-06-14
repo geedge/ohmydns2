@@ -3,7 +3,7 @@ package analyze
 import (
 	"context"
 	"net"
-	"ohmydns2/plugin/v64DNS/analyze/pb"
+	"ohmydns2/plugin/v64dns/analyze/pb"
 	"sync"
 	"sync/atomic"
 	"unsafe"

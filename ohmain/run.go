@@ -144,7 +144,7 @@ func versionString() string {
 // e.g.,
 // linux/amd64, go1.8.3, a6d2d7b5
 func releaseString() string {
-	return fmt.Sprintf("%s/%s, %s, %s\n", runtime.GOOS, runtime.GOARCH, runtime.Version(), GitCommit)
+	return fmt.Sprintf("%s/%s, %s\n", runtime.GOOS, runtime.GOARCH, runtime.Version())
 }
 
 // setVersion figures out the version information
