@@ -2,12 +2,14 @@ package dnsserver
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	stdlog "log"
 	"net"
 	"net/http"
-	"ohmydns2/plugin/pkg/doh"
 	ohttp "ohmydns2/plugin/pkg/http"
+	olog "ohmydns2/plugin/pkg/log"
+	"ohmydns2/plugin/pkg/prober"
 	"ohmydns2/plugin/pkg/reuseport"
 	"ohmydns2/plugin/pkg/transport"
 	"ohmydns2/plugin/prometheus/vars"
@@ -15,9 +17,6 @@ import (
 
 	"github.com/coredns/caddy"
 )
-
-const proberPath = "/prober"
-const proberurl = "localhost"
 
 type ProberWriter struct {
 	laddr   net.Addr
@@ -30,6 +29,12 @@ type ProberHTTP struct {
 	httpServer   *http.Server
 	listenAddr   net.Addr
 	validRequest func(*http.Request) bool
+	proberlist   *prober.ProberList
+}
+
+type ret struct {
+	probernum int
+	m         map[int]prober.Prober
 }
 
 // NewProberHTTP returns a new ohmydns prober(可用HTTP调用参数) and compiles all plugins in to it.
@@ -56,8 +61,12 @@ func NewProberHTTP(addr string, group []*Config) (*ProberHTTP, error) {
 		IdleTimeout:  s.idleTimeout,
 		ErrorLog:     stdlog.New(&loggerAdapter{}, "", 0),
 	}
+
+	pl := &prober.ProberList{
+		Pl: make(map[int]*prober.Prober),
+	}
 	sh := &ProberHTTP{
-		Server: s, httpServer: srv, validRequest: validator,
+		Server: s, httpServer: srv, validRequest: validator, proberlist: pl,
 	}
 	sh.httpServer.Handler = sh
 
@@ -81,7 +90,7 @@ func (p *ProberHTTP) ServePacket(pc net.PacketConn) error { return nil }
 
 // Listen implements caddy.TCPServer interface.
 func (p *ProberHTTP) Listen() (net.Listener, error) {
-	l, err := reuseport.Listen("tcp", p.Addr[len("http://"):])
+	l, err := reuseport.Listen("tcp", p.Addr[len(transport.PROBER+"://"):])
 	if err != nil {
 		return nil, err
 	}
@@ -122,6 +131,7 @@ func (p *ProberHTTP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		p.countResponse(http.StatusNotFound)
 		return
 	}
+	w.Header().Set("Content-Type", prober_contentType)
 
 	// 解析请求
 	param, _ := ohttp.ParseRequest(r)
@@ -130,9 +140,31 @@ func (p *ProberHTTP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// ptype: 探针类型，v64代表IPv4-IPv6关联发现的探针
 	// prange: 探测范围，默认全局，
 	if v, ok := param["act"]; ok && v[0] == "new" {
+		olog.Info("新建探测器")
 		//TODO:新建探测器
+		err := p.proberlist.AddProber(param)
+		if err != nil {
+			//发生错误
+			w.WriteHeader(http.StatusInternalServerError)
+			p.countResponse(http.StatusInternalServerError)
+			return
+		}
+
 	} else {
 		//TODO:展示当前运行探测器
+		olog.Info("dangqian")
+		allProber, m, err := p.proberlist.ListAllProber()
+		if err != nil {
+			return
+		}
+		r := &ret{
+			probernum: allProber,
+			m:         m,
+		}
+		err = json.NewEncoder(w).Encode(r)
+		if err != nil {
+			return
+		}
 	}
 
 	// We just call the normal chain handler - all error handling is done there.
@@ -156,7 +188,7 @@ func (p *ProberHTTP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	//mt, _ := response.Typify(dw.Msg, time.Now().UTC())
 	//age := dnsutil.MinimalTTL(dw.Msg, mt)
 	buf := []byte("test")
-	w.Header().Set("Content-Type", doh.MimeType)
+
 	w.Header().Set("Content-Length", strconv.Itoa(len(buf)))
 	w.WriteHeader(http.StatusOK)
 	p.countResponse(http.StatusOK)
@@ -175,3 +207,9 @@ func (p *ProberHTTP) Shutdown() error {
 	}
 	return nil
 }
+
+const (
+	prober_contentType = "application/json"
+	proberPath         = "/prober"
+	proberurl          = "localhost"
+)

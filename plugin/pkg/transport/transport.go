@@ -2,13 +2,12 @@ package transport
 
 // These transports are supported by OhmyDNS.
 const (
-	DNS       = "dns"
-	TLS       = "tls"
-	GRPC      = "grpc"
-	HTTPS     = "https"
-	UNIX      = "unix"
-	PROBER    = "prober"
-	PROBERPTO = "http"
+	DNS    = "dns"
+	TLS    = "tls"
+	GRPC   = "grpc"
+	HTTPS  = "https"
+	UNIX   = "unix"
+	PROBER = "prober"
 )
 
 // Port numbers for the various transports.

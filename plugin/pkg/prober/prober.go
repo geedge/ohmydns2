@@ -8,12 +8,12 @@ import (
 
 // 探测器列表
 type ProberList struct {
-	pl map[int]*Prober // 探测器
+	Pl map[int]*Prober // 探测器
 }
 
 // 获取当前正在运行的探测器数量
 func (pl ProberList) GetNum() int {
-	return len(pl.pl)
+	return len(pl.Pl)
 }
 
 // 增加一个探测器,并返回对应的pid
@@ -22,17 +22,22 @@ func (pl ProberList) AddProber(arg map[string][]string) error {
 	p := NewProber()
 	p.SetArg(arg)
 	p.pid = int(t)
-	pl.pl[int(t)] = p
+	pl.Pl[int(t)] = p
 	return nil
 }
 
 // 列举所有探测器信息
-func (pl ProberList) ListAllProber() (int, map[int]*Prober, error) {
-	return pl.GetNum(), pl.pl, nil
+func (pl ProberList) ListAllProber() (int, map[int]Prober, error) {
+	rm := make(map[int]Prober)
+	for k, v := range pl.Pl {
+		rm[k] = *v
+	}
+
+	return pl.GetNum(), rm, nil
 }
 
 func (pl ProberList) DeleteProber(pid int) error {
-	err := pl.pl[pid].Stop()
+	err := pl.Pl[pid].Stop()
 	if err != nil {
 		panic("can't Stop prober " + strconv.Itoa(pid))
 	}

@@ -2,7 +2,6 @@ package v64dns
 
 import (
 	"net"
-	olog "ohmydns2/plugin/pkg/log"
 	"ohmydns2/plugin/v64dns/analyze"
 	"strconv"
 	"strings"
@@ -90,7 +89,6 @@ func (el *explist) Stop() {
 	for {
 		eid := <-el.c
 		el.m.Lock()
-		olog.Info("delete  " + eid)
 		delete(el.l, eid)
 		el.m.Unlock()
 	}
@@ -115,7 +113,6 @@ func (v V64dns) ResponseHandler(msg *dns.Msg, sip net.IP, v64r v64Request) *dns.
 	step, _ := strconv.Atoi(string(rune(strings.Split(msg.Question[0].Name, ".")[0][1])))
 	switch msg.Question[0].Qtype {
 	case dns.TypeTXT, dns.TypeCNAME:
-		olog.Info(el.l)
 		if eo, ok := el.l[v64r.eid]; ok {
 			//	存在该实验id
 			if step < v.p.maxLen {
@@ -130,7 +127,6 @@ func (v V64dns) ResponseHandler(msg *dns.Msg, sip net.IP, v64r v64Request) *dns.
 			eo.isAll <- true
 			return v.ResponseTXT(msg)
 		}
-		olog.Info("add " + v64r.eid)
 		//不存在，可能是新到来的也可能是以前的
 		if step != 1 {
 			// 曾经的，直接返回
