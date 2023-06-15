@@ -186,12 +186,13 @@ func (v V64dns) ResponseNS(msg *dns.Msg) *dns.Msg {
 func (v V64dns) ResponseCNAME(msg *dns.Msg, sip net.IP) *dns.Msg {
 	qname := msg.Question[0].Name
 	var (
-		maskPart  = ""
-		subdomain = ""
-		zone      = ""
-		ran       = ""
-		prog      = ""
-		expid     = ""
+		maskPart     = ""
+		subdomain    = ""
+		zone         = ""
+		ran          = ""
+		prog         = ""
+		expid        = ""
+		newsubdomain = ""
 	)
 
 	for _, qs := range strings.Split(qname, ".") {
@@ -199,7 +200,8 @@ func (v V64dns) ResponseCNAME(msg *dns.Msg, sip net.IP) *dns.Msg {
 		case 1:
 			maskPart += qs + "."
 		case 2:
-			subdomain = changeSubDomain(qs)
+			subdomain = qs
+			newsubdomain = changeSubDomain(qs)
 		case 5:
 			expid = qs
 		case 4:
@@ -223,7 +225,7 @@ func (v V64dns) ResponseCNAME(msg *dns.Msg, sip net.IP) *dns.Msg {
 	}
 
 	// 响应内容
-	answer.Target = prog + "." + expid + "." + maskPart + "." + ran + "." + subdomain + "." + zone
+	answer.Target = prog + "." + expid + "." + maskPart + "." + ran + "." + newsubdomain + "." + zone
 
 	msg = v.SetAuthAdd(msg, subdomain)
 	msg.Answer = append(msg.Answer, answer)
