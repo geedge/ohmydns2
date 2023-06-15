@@ -2,7 +2,8 @@ package v64dns
 
 import (
 	"net"
-	"ohmydns2/plugin/v64dns/analyze"
+	olog "ohmydns2/plugin/pkg/log"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -35,7 +36,7 @@ func (e expobject) Addchain(ip net.IP) {
 }
 
 // 停止实验，根据倒计时停止
-func (e expobject) Stop(a analyze.Analyzer) {
+func (e expobject) Stop() {
 	// 如果到达时间限制则通过管道通知停止
 	timeTicker := time.NewTicker(1 * time.Second)
 	i := e.interval
@@ -45,16 +46,19 @@ func (e expobject) Stop(a analyze.Analyzer) {
 		// 计时结束或者完成本次实验之后停止
 		if i == 0 || e.isAll {
 			el.c <- e.eid
-			a.AnalyzeChain(e.chain)
 
 			break
 		}
 	}
 }
 
-// 增加实验进度
-func (e expobject) AddProgress() {
+// 增加实验进度,返回1代表未处理，0代表进度增加
+func (e expobject) AddProgress(step int) int {
+	if step < e.progress {
+		return 1
+	}
 	e.progress += 1
+	return 0
 }
 
 type explist struct {
@@ -79,6 +83,7 @@ func (el *explist) Stop() {
 		eid := <-el.c
 		el.m.Lock()
 		delete(el.l, eid)
+		olog.Info("delete  " + eid)
 		el.m.Unlock()
 	}
 }
@@ -94,6 +99,7 @@ func (el *explist) Add(eid string, sip net.IP) {
 		chain:    []net.IP{sip},
 	}
 	el.l[eid] = n
+	go n.Stop()
 	el.m.Unlock()
 }
 
@@ -102,10 +108,12 @@ func (v V64dns) ResponseHandler(msg *dns.Msg, sip net.IP, v64r v64Request) *dns.
 	case dns.TypeTXT, dns.TypeCNAME:
 		if eo, ok := el.l[v64r.eid]; ok {
 			//	存在该实验id
-			step := strings.Split(msg.Question[0].Name, ".")[0][1]
-			if int(step) < v.p.maxLen {
-				eo.Addchain(sip)
-				eo.AddProgress()
+			step, _ := strconv.Atoi(string(rune(strings.Split(msg.Question[0].Name, ".")[0][1])))
+			if step < v.p.maxLen {
+				ret := eo.AddProgress(step)
+				if ret == 0 {
+					eo.Addchain(sip)
+				}
 				// 未到达最后一步
 				return v.ResponseCNAME(msg, sip)
 			}
@@ -121,7 +129,7 @@ func (v V64dns) ResponseHandler(msg *dns.Msg, sip net.IP, v64r v64Request) *dns.
 		return v.ResponseNS(msg)
 	default:
 		// 不符合要求的请求类型直接返回空响应
-		return msg.SetReply(msg)
+		return msg
 	}
 }
 
@@ -142,15 +150,11 @@ func (v V64dns) ResponseTXT(msg *dns.Msg) *dns.Msg {
 
 	answer := new(dns.TXT)
 	answer.Txt = ans
-	answer.Hdr.Class = dns.ClassINET
-	answer.Hdr.Ttl = 3600
-	answer.Hdr.Name = qname
-	answer.Hdr.Rrtype = dns.TypeTXT
+	answer.Hdr = dns.RR_Header{Name: qname, Ttl: 3600, Class: dns.ClassINET, Rrtype: dns.TypeTXT}
 
-	res := msg.SetReply(msg)
-	res = v.SetAuthAdd(res, sub)
-	res.Answer = append(res.Answer, answer)
-	return res
+	msg = v.SetAuthAdd(msg, sub)
+	msg.Answer = append(msg.Answer, answer)
+	return msg
 }
 
 // ResponseNS 返回NS记录

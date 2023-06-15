@@ -145,3 +145,13 @@ func (v V64dns) SetAuthAdd(res *dns.Msg, subdomain string) *dns.Msg {
 	}
 	return res
 }
+
+// 从域名中提取eid
+func (v V64dns) ExtractEid(qname string) string {
+	for _, qs := range strings.Split(qname, ".") {
+		if v.MatchType(qs) == 5 {
+			return qs
+		}
+	}
+	return ""
+}

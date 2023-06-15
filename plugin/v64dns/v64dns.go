@@ -45,14 +45,18 @@ func (v V64dns) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) 
 	switch v.VaildRequest(state.QName()) {
 	case 0:
 		//	正常请求
-		v64 := &v64Request{eid: "test"}
-		ip := state.IP()
-		msg = v.ResponseHandler(msg, net.ParseIP(ip), *v64)
+		qname := v.ExtractEid(state.QName())
+		if qname != "" {
+			v64 := &v64Request{eid: v.ExtractEid(state.QName())}
+			ip := state.IP()
+			msg = v.ResponseHandler(msg, net.ParseIP(ip), *v64)
+		}
 	case 2:
 		log.Info("按照mini请求处理")
 		//	Qname mini
 		msg = v.ResponseNS(msg)
 	case 1:
+		//其他请求不响应
 		return 0, nil
 	}
 

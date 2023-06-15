@@ -27,6 +27,7 @@ func setup(c *caddy.Controller) error {
 // 解析参数
 func parseArg(c *caddy.Controller) (*V64dns, error) {
 	v := new(V64dns)
+	v.p.maxLen = chain_maxlen
 
 	for c.Next() {
 		arg := c.RemainingArgs()
@@ -94,3 +95,7 @@ func parseArg(c *caddy.Controller) (*V64dns, error) {
 }
 
 var log = olog.NewWithPlugin("v64dns")
+
+const (
+	chain_maxlen = 4
+)
