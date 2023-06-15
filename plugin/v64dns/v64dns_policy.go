@@ -3,6 +3,7 @@ package v64dns
 import (
 	"net"
 	olog "ohmydns2/plugin/pkg/log"
+	"ohmydns2/plugin/v64dns/analyze"
 	"strconv"
 	"strings"
 	"sync"
@@ -24,9 +25,9 @@ type Policy struct {
 // expobject 代表了每个实验对象
 type expobject struct {
 	eid      string
-	interval int  //实验对象的等待间隔，超过则认为实验过程存在问题导致只有部分请求
-	isAll    bool //实验对象对应过程是否完整
-	progress int  // 实验进度
+	interval int       //实验对象的等待间隔，超过则认为实验过程存在问题导致只有部分请求
+	isAll    chan bool //实验对象对应过程是否完整
+	progress int       // 实验进度
 	chain    []net.IP
 }
 
@@ -36,18 +37,25 @@ func (e expobject) Addchain(ip net.IP) {
 }
 
 // 停止实验，根据倒计时停止
-func (e expobject) Stop() {
+func (e expobject) Stop(a analyze.Analyzer) {
 	// 如果到达时间限制则通过管道通知停止
 	timeTicker := time.NewTicker(1 * time.Second)
 	i := e.interval
 	for {
-		<-timeTicker.C
-		i--
-		// 计时结束或者完成本次实验之后停止
-		if i == 0 || e.isAll {
-			el.c <- e.eid
-
-			break
+		select {
+		case <-timeTicker.C:
+			i--
+			if i == 0 {
+				el.c <- e.eid
+				close(e.isAll)
+				return
+			}
+		case t := <-e.isAll:
+			if t == true {
+				el.c <- e.eid
+				close(e.isAll)
+				return
+			}
 		}
 	}
 }
@@ -82,33 +90,34 @@ func (el *explist) Stop() {
 	for {
 		eid := <-el.c
 		el.m.Lock()
-		delete(el.l, eid)
 		olog.Info("delete  " + eid)
+		delete(el.l, eid)
 		el.m.Unlock()
 	}
 }
 
 // 增加实验对象
-func (el *explist) Add(eid string, sip net.IP) {
+func (el *explist) Add(eid string, sip net.IP, a analyze.Analyzer) {
 	el.m.Lock()
 	n := expobject{
-		eid:      "",
+		eid:      eid,
 		interval: interval,
-		isAll:    false,
+		isAll:    make(chan bool),
 		progress: 1,
 		chain:    []net.IP{sip},
 	}
 	el.l[eid] = n
-	go n.Stop()
+	go n.Stop(a)
 	el.m.Unlock()
 }
 
 func (v V64dns) ResponseHandler(msg *dns.Msg, sip net.IP, v64r v64Request) *dns.Msg {
+	step, _ := strconv.Atoi(string(rune(strings.Split(msg.Question[0].Name, ".")[0][1])))
 	switch msg.Question[0].Qtype {
 	case dns.TypeTXT, dns.TypeCNAME:
+		olog.Info(el.l)
 		if eo, ok := el.l[v64r.eid]; ok {
 			//	存在该实验id
-			step, _ := strconv.Atoi(string(rune(strings.Split(msg.Question[0].Name, ".")[0][1])))
 			if step < v.p.maxLen {
 				ret := eo.AddProgress(step)
 				if ret == 0 {
@@ -118,11 +127,17 @@ func (v V64dns) ResponseHandler(msg *dns.Msg, sip net.IP, v64r v64Request) *dns.
 				return v.ResponseCNAME(msg, sip)
 			}
 			// 到达最后一步
-			eo.isAll = true
+			eo.isAll <- true
 			return v.ResponseTXT(msg)
 		}
-		//不存在，则认为是新到来的
-		el.Add(v64r.eid, sip)
+		olog.Info("add " + v64r.eid)
+		//不存在，可能是新到来的也可能是以前的
+		if step != 1 {
+			// 曾经的，直接返回
+			return msg
+		}
+		// 新的实验，响应CNAME
+		el.Add(v64r.eid, sip, v.a)
 		return v.ResponseCNAME(msg, sip)
 
 	case dns.TypeNS:
@@ -179,11 +194,10 @@ func (v V64dns) ResponseNS(msg *dns.Msg) *dns.Msg {
 	} else {
 		answer.Ns = v.ipv4NS
 	}
-	res := msg.SetReply(msg)
-	res = v.SetAuthAdd(res, sub)
-	res.Answer = append(res.Answer, answer)
+	msg = v.SetAuthAdd(msg, sub)
+	msg.Answer = append(msg.Answer, answer)
 
-	return res
+	return msg
 }
 
 // ResponseCNAME 响应CNAME记录
