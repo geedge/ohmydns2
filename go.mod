@@ -9,6 +9,7 @@ require (
 	github.com/farsightsec/golang-framestream v0.3.0
 	github.com/miekg/dns v1.1.54
 	github.com/opentracing/opentracing-go v1.2.0
+	github.com/pochard/commons v1.1.2
 	github.com/prometheus/client_golang v1.15.1
 	golang.org/x/sys v0.6.0
 	google.golang.org/grpc v1.55.0

@@ -1,6 +1,6 @@
 .:1153 {
     debug
-    v64dns test.com {
+    v64dns n64.top {
         v4ns ns4 1.1.1.1
         v6ns ns6 2001::1
         chain v4 v6

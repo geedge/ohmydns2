@@ -8,7 +8,6 @@ import (
 	"net"
 	"net/http"
 	ohttp "ohmydns2/plugin/pkg/http"
-	olog "ohmydns2/plugin/pkg/log"
 	"ohmydns2/plugin/pkg/prober"
 	"ohmydns2/plugin/pkg/reuseport"
 	"ohmydns2/plugin/pkg/transport"
@@ -33,8 +32,15 @@ type ProberHTTP struct {
 }
 
 type ret struct {
-	probernum int
-	m         map[int]prober.Prober
+	Code      int                   `json:"code"`
+	Probernum int                   `json:"probernum"`
+	M         map[int]prober.Prober `json:"proberlist"`
+	Msg       string                `json:"msg"`
+}
+
+type newret struct {
+	Code int    `json:"code"`
+	Msg  string `json:"msg"`
 }
 
 // NewProberHTTP returns a new ohmydns prober(可用HTTP调用参数) and compiles all plugins in to it.
@@ -137,63 +143,65 @@ func (p *ProberHTTP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	param, _ := ohttp.ParseRequest(r)
 	// 参数定义
 	// act: res代表获取当前所有Prober状态，new代表新建Prober
-	// ptype: 探针类型，v64代表IPv4-IPv6关联发现的探针
+	// ptype: 探针类型，v64代表IPv4-IPv6关联发现的探针,默认v64
 	// prange: 探测范围，默认全局，
-	if v, ok := param["act"]; ok && v[0] == "new" {
-		olog.Info("新建探测器")
-		//TODO:新建探测器
-		err := p.proberlist.AddProber(param)
-		if err != nil {
-			//发生错误
-			w.WriteHeader(http.StatusInternalServerError)
-			p.countResponse(http.StatusInternalServerError)
-			return
-		}
 
+	// 检查参数
+	if r, rc := prober.VaildArgs(param); rc != 0 {
+		//发生错误
+		w.WriteHeader(http.StatusBadRequest)
+		p.countResponse(http.StatusBadRequest)
+		rec := &ret{Code: http.StatusBadRequest, Msg: r}
+		msg, _ := json.Marshal(rec)
+		w.Write(msg)
+		return
+	}
+	// 参数没有问题，开始处理
+	if v, ok := param["act"]; ok {
+		switch v[0] {
+		case "new":
+			rs, err := p.proberlist.AddProber(param)
+			if err != nil {
+				//发生错误
+				w.WriteHeader(http.StatusInternalServerError)
+				p.countResponse(http.StatusInternalServerError)
+				r := &newret{Code: http.StatusInternalServerError, Msg: rs}
+				msg, _ := json.Marshal(r)
+				w.Write(msg)
+				return
+			}
+			//一切正常
+			w.WriteHeader(http.StatusOK)
+			p.countResponse(http.StatusOK)
+			r := &newret{Code: http.StatusOK, Msg: rs}
+			msg, _ := json.Marshal(r)
+			w.Write(msg)
+			return
+		case "stop":
+			//TODO:探测停止
+			//if n,pok:=param["pid"];pok{
+			//
+			//	return
+			//}
+			//	无额外参数代表停止所有探测
+
+		}
 	} else {
-		//TODO:展示当前运行探测器
-		olog.Info("dangqian")
 		allProber, m, err := p.proberlist.ListAllProber()
 		if err != nil {
 			return
 		}
-		r := &ret{
-			probernum: allProber,
-			m:         m,
+		rt := ret{
+			Code:      http.StatusOK,
+			Probernum: allProber,
+			M:         m,
 		}
-		err = json.NewEncoder(w).Encode(r)
-		if err != nil {
-			return
-		}
+		w.WriteHeader(http.StatusOK)
+		p.countResponse(http.StatusOK)
+		msg, _ := json.Marshal(rt)
+		w.Write(msg)
 	}
 
-	// We just call the normal chain handler - all error handling is done there.
-	// We should expect a packet to be returned that we can send to the client.
-	//ctx := context.WithValue(context.Background(), Key{}, p.Server)
-	//ctx = context.WithValue(ctx, LoopKey{}, 0)
-	//ctx = context.WithValue(ctx, HTTPRequestKey{}, r)
-	////p.ServeDNS(ctx, dw, msg)
-	//
-	//// See section 4.2.1 of RFC 8484.
-	//// We are using code 500 to indicate an unexpected situation when the chain
-	//// handler has not provided any response message.
-	//if dw.Msg == nil {
-	//	http.Error(w, "No response", http.StatusInternalServerError)
-	//	p.countResponse(http.StatusInternalServerError)
-	//	return
-	//}
-	//
-	//buf, _ := dw.Msg.Pack()
-	//
-	//mt, _ := response.Typify(dw.Msg, time.Now().UTC())
-	//age := dnsutil.MinimalTTL(dw.Msg, mt)
-	buf := []byte("test")
-
-	w.Header().Set("Content-Length", strconv.Itoa(len(buf)))
-	w.WriteHeader(http.StatusOK)
-	p.countResponse(http.StatusOK)
-
-	w.Write(buf)
 }
 
 func (p *ProberHTTP) countResponse(status int) {
