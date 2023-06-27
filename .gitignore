@@ -264,5 +264,6 @@ cython_debug/
 
 /plugin/v64dns/data/
 .idea
+/plugin/v64DNS/analyze/data/
 /go_build_ohmydns2_linux
 /bin/

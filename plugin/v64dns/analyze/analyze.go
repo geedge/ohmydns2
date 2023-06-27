@@ -2,7 +2,6 @@ package analyze
 
 import (
 	"context"
-	"net"
 	"ohmydns2/plugin/v64dns/analyze/pb"
 	"sync"
 	"sync/atomic"
@@ -24,19 +23,27 @@ type Analyzer struct {
 }
 
 var (
+	A   Analyzer
 	c   unsafe.Pointer
 	lck sync.Mutex
 )
 
-// GetGrpcClient 复用Grpc连接, 返回需要的client
-func (a Analyzer) GetGrpcClient(target string) error {
-	conn, err := a.GetConn(target)
-	if err != nil {
-		olog.Error("GetGrpcClient:%s", err.Error())
-		return err
+func NewAnalyzer(gtype, guri, guser, gpass string) error {
+	A = Analyzer{
+		Graphtype:  gtype,
+		Graphuri:   guri,
+		GraphUser:  guser,
+		GraphPass:  gpass,
+		IsA:        true,
+		grpcClient: nil,
 	}
-	a.grpcClient = pb.NewGrpcServiceClient(conn)
-	return nil //此处调用pb.go文件中生成的创建client的方法
+	conn, err := A.GetConn("127.0.0.1:56789")
+	if err != nil {
+		olog.Errorf("GetGrpcClient:%s", err.Error())
+		panic("error")
+	}
+	A.grpcClient = pb.NewGrpcServiceClient(conn)
+	return nil
 }
 
 func (a Analyzer) GetConn(target string) (*grpc.ClientConn, error) {
@@ -63,31 +70,21 @@ func newGrpcConn(target string) (*grpc.ClientConn, error) {
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	if err != nil {
-		olog.Error("连接服务端失败: %s", err)
+		olog.Errorf("连接服务端失败: %s", err)
 		return nil, err
 	}
 	return conn, nil
 }
 
-func (a *Analyzer) AnalyzeChain(i []net.IP) {
-	if a.IsA {
-		data := []string{}
-		for _, ip := range i {
-			data = append(data, ip.String())
-		}
-		a.go2py(data)
-	}
-}
-
 // 远程调用Python脚本方法
-func (a Analyzer) go2py(i []string) {
+func (a Analyzer) Go2py(i []string) {
 
 	// 调用服务端函数
 	r, err := a.grpcClient.AnalyzeService(context.Background(), &pb.DnsChain{
 		Gtype: a.Graphtype,
 		Guri:  a.Graphuri,
 		Guser: a.GraphUser,
-		Gpass: a.GraphUser,
+		Gpass: a.GraphPass,
 		Data:  i,
 	})
 	// 处理不成功则显示警告信息
@@ -95,7 +92,7 @@ func (a Analyzer) go2py(i []string) {
 		olog.Warning(r.Res)
 	}
 	if err != nil {
-		olog.Error("调用解析链分析器代码失败: %s", err)
+		olog.Errorf("调用解析链分析器代码失败: %s", err)
 		return
 	}
 }

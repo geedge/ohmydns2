@@ -36,7 +36,7 @@ func (e expobject) Addchain(ip net.IP) {
 }
 
 // 停止实验，根据倒计时停止
-func (e expobject) Stop(a analyze.Analyzer) {
+func (e expobject) Stop() {
 	// 如果到达时间限制则通过管道通知停止
 	timeTicker := time.NewTicker(1 * time.Second)
 	i := e.interval
@@ -45,13 +45,13 @@ func (e expobject) Stop(a analyze.Analyzer) {
 		case <-timeTicker.C:
 			i--
 			if i == 0 {
-				el.c <- e.eid
+				EL.c <- e.eid
 				close(e.isAll)
 				return
 			}
 		case t := <-e.isAll:
 			if t == true {
-				el.c <- e.eid
+				EL.c <- e.eid
 				close(e.isAll)
 				return
 			}
@@ -69,18 +69,20 @@ func (e expobject) AddProgress(step int) int {
 }
 
 type explist struct {
-	m sync.Mutex
-	l map[string]expobject
-	c chan string
+	m      sync.Mutex
+	l      map[string]expobject
+	c      chan string   // eid传递管道（接受）
+	Ipchan chan []net.IP // IP链传递管道（发送）
 }
 
-var el = NewExpList()
+var EL = NewExpList()
 
 // 为explist创建空间
 func NewExpList() *explist {
 	el := new(explist)
 	el.c = make(chan string, 5)
 	el.l = make(map[string]expobject)
+	el.Ipchan = make(chan []net.IP, 128)
 	return el
 }
 
@@ -89,13 +91,14 @@ func (el *explist) Stop() {
 	for {
 		eid := <-el.c
 		el.m.Lock()
+		analyze.A.Go2py(el.l[eid].IPchain2Str())
 		delete(el.l, eid)
 		el.m.Unlock()
 	}
 }
 
 // 增加实验对象
-func (el *explist) Add(eid string, sip net.IP, a analyze.Analyzer) {
+func (el *explist) Add(eid string, sip net.IP) {
 	el.m.Lock()
 	n := expobject{
 		eid:      eid,
@@ -105,7 +108,7 @@ func (el *explist) Add(eid string, sip net.IP, a analyze.Analyzer) {
 		chain:    []net.IP{sip},
 	}
 	el.l[eid] = n
-	go n.Stop(a)
+	go n.Stop()
 	el.m.Unlock()
 }
 
@@ -113,7 +116,7 @@ func (v V64dns) ResponseHandler(msg *dns.Msg, sip net.IP, v64r v64Request) *dns.
 	step, _ := strconv.Atoi(string(rune(strings.Split(msg.Question[0].Name, ".")[0][1])))
 	switch msg.Question[0].Qtype {
 	case dns.TypeTXT, dns.TypeCNAME:
-		if eo, ok := el.l[v64r.eid]; ok {
+		if eo, ok := EL.l[v64r.eid]; ok {
 			//	存在该实验id
 			if step < v.p.maxLen {
 				ret := eo.AddProgress(step)
@@ -133,7 +136,7 @@ func (v V64dns) ResponseHandler(msg *dns.Msg, sip net.IP, v64r v64Request) *dns.
 			return msg
 		}
 		// 新的实验，响应CNAME
-		el.Add(v64r.eid, sip, v.a)
+		EL.Add(v64r.eid, sip)
 		return v.ResponseCNAME(msg, sip)
 
 	case dns.TypeNS:
@@ -157,7 +160,7 @@ func (v V64dns) ResponseTXT(msg *dns.Msg) *dns.Msg {
 			sub = qs
 		}
 	}
-	ans := el.l[expid].IPchain2Str()
+	ans := EL.l[expid].IPchain2Str()
 
 	answer := new(dns.TXT)
 	answer.Txt = ans
@@ -165,6 +168,7 @@ func (v V64dns) ResponseTXT(msg *dns.Msg) *dns.Msg {
 
 	msg = v.SetAuthAdd(msg, sub)
 	msg.Answer = append(msg.Answer, answer)
+	log.Info(msg.String())
 	return msg
 }
 
@@ -243,7 +247,7 @@ func (v V64dns) ResponseCNAME(msg *dns.Msg, sip net.IP) *dns.Msg {
 
 	msg = v.SetAuthAdd(msg, subdomain)
 	msg.Answer = append(msg.Answer, answer)
-
+	log.Info(msg.Answer[0].String())
 	return msg
 }
 

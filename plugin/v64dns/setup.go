@@ -4,6 +4,7 @@ import (
 	"ohmydns2/core/dnsserver"
 	"ohmydns2/plugin"
 	olog "ohmydns2/plugin/pkg/log"
+	"ohmydns2/plugin/v64dns/analyze"
 	"strconv"
 
 	"github.com/coredns/caddy"
@@ -74,14 +75,8 @@ func parseArg(c *caddy.Controller) (*V64dns, error) {
 					//	缺少参数
 					log.Error("analyze参数错误，请检查")
 				}
-				v.a.Graphtype = args[0]
-				v.a.Graphuri = args[1]
-				v.a.GraphUser = args[2]
-				v.a.GraphPass = args[3]
-				v.a.IsA = true
-				//启动Python服务监听分析请求
-
-				err := v.a.GetGrpcClient(args[1])
+				//创建Analyzer对象
+				err := analyze.NewAnalyzer(args[0], args[1], args[2], args[3])
 				if err != nil {
 					return nil, err
 				}
@@ -90,7 +85,7 @@ func parseArg(c *caddy.Controller) (*V64dns, error) {
 		break
 	}
 	// 监控停止信号
-	go el.Stop()
+	go EL.Stop()
 	return v, nil
 }
 
