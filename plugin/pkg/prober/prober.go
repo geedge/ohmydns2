@@ -61,6 +61,7 @@ type Prober struct {
 	AllAddr     int      `json:"allAddr"`     // 总共需要探测的地址数
 	ScannedAddr int      `json:"scannedAddr"` // 已探测过的地址数
 	Pid         int      `json:"pid"`         // 探测器ID
+	loop        bool     `json:"loop"`        //是否持续探测
 	m           sync.Mutex
 	sigstop     chan int // stop信号管道
 	c           *dns.Client
@@ -90,6 +91,12 @@ func (p *Prober) SetArg(arg map[string][]string) {
 		// 默认v64 CNAME关联
 		p.Ptype = defaultPtype
 	}
+	// 是否持续探测，默认只探测一次
+	if v, ok := arg[ploop]; ok && v[0] == "1" {
+		p.loop = true
+	} else {
+		p.loop = defaultPloop
+	}
 	p.ScannedAddr = 0
 	p.worker = defaultMaxGRout
 	p.c = new(dns.Client)
@@ -101,31 +108,8 @@ func (p *Prober) SetArg(arg map[string][]string) {
 func (p *Prober) Start() error {
 	if p.Prange[0] == defaultPrange {
 		//	全球探测
-		ipc := GenGlobIPv4()
-		go func() {
-			p.wg.Add(p.worker)
-			count := p.worker
-			for {
-				ip, ok := <-ipc
-				if ok {
-					go func() {
-						_ = p.Probe(ip)
-						p.ScannedAddr += 1
-						p.wg.Done()
-					}()
+		go p.startGlobScan()
 
-				} else {
-					break
-				}
-				count -= 1
-				if count == 0 {
-					p.wg.Wait()
-					count = p.worker
-					p.wg.Add(p.worker)
-				}
-			}
-
-		}()
 	}
 	return nil
 }
@@ -149,7 +133,6 @@ func (p *Prober) Probev64(ip net.IP) error {
 	// TODO:展示响应内容
 	_, _, err := p.c.Exchange(msg, ip.String()+":53")
 	if err != nil {
-		olog.Info(err.Error())
 		return err
 	}
 	return nil

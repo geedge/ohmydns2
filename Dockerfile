@@ -17,15 +17,18 @@ RUN go env -w GO111MODULE=on;\
     apt-get clean; \
     go build -o ./ohmydns2 ./
 #  生成部署
-FROM ubuntu:latest
+FROM python:3
 WORKDIR /project/ohmydns2
 COPY --from=0 /project/ohmydns2/ /project/ohmydns2/
-EXPOSE 53/tcp
-EXPOSE 2153/tcp
-EXPOSE 53/udp
-EXPOSE 1153/udp
-EXPOSE 1153/tcp
-# TODO：先启动Python服务再启动OhMydns
+# 2115是prober默认端口
+EXPOSE 2115/tcp 53/tcp 53/udp 1153/udp 1153/tcp
+# 先启动Python服务再启动OhMydns
+COPY plugin/v64dns/analyze/pb/requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt;\
+    mkdir "config";\
+    mkdir "data";\
+    ln "-s plugin/v64dns/analyze/data data"
+CMD [ "python", "./plugin/v64dns/analyze/pb/analyzer.py" ]
 ENTRYPOINT ["./ohmydns2"]
 
 

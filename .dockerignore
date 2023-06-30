@@ -1,2 +1,3 @@
 *.md
-plugin/v64dns/data
+data
+plugin/v64dns/analyze/venv
