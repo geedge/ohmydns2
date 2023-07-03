@@ -1,6 +1,7 @@
 package v64dns
 
 import (
+	"context"
 	"net"
 	"ohmydns2/plugin/v64dns/analyze"
 	"strconv"
@@ -35,28 +36,26 @@ func (e expobject) Addchain(ip net.IP) {
 	e.chain = append(e.chain, ip)
 }
 
-// 停止实验，根据倒计时停止
+// 停止实验，根据倒计时或者信号量停止
 func (e expobject) Stop() {
 	// 如果到达时间限制则通过管道通知停止
-	timeTicker := time.NewTicker(1 * time.Second)
-	i := e.interval
-	for {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(e.interval)*time.Second)
+	defer cancel()
+	defer close(e.isAll)
+	ticker := time.NewTicker(1 * time.Second)
+	for _ = range ticker.C {
 		select {
-		case <-timeTicker.C:
-			i--
-			if i == 0 {
-				EL.c <- e.eid
-				close(e.isAll)
-				return
-			}
+		case <-ctx.Done():
+			break
 		case t := <-e.isAll:
 			if t == true {
-				EL.c <- e.eid
-				close(e.isAll)
-				return
+				break
 			}
+		default:
+			continue
 		}
 	}
+	EL.c <- e.eid
 }
 
 // 增加实验进度,返回1代表未处理，0代表进度增加
