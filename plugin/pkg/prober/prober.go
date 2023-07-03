@@ -1,6 +1,7 @@
 package prober
 
 import (
+	"context"
 	"github.com/miekg/dns"
 	"math"
 	"net"
@@ -33,7 +34,10 @@ func (pl ProberList) AddProber(arg map[string][]string) (string, error) {
 	} else {
 		olog.Infof("新增探测器 %v:\t探测范围\t探针类型\n\t\t\t\t%v\t%v", p.Pid, "自定义", p.Ptype)
 	}
-	p.Start()
+	err := p.Start()
+	if err != nil {
+		return "", err
+	}
 	return "OK", nil
 }
 
@@ -47,10 +51,22 @@ func (pl ProberList) ListAllProber() (int, map[int]Prober, error) {
 	return pl.GetNum(), rm, nil
 }
 
-func (pl ProberList) DeleteProber(pid int) error {
+func (pl ProberList) DeleteProberById(pid int) error {
 	err := pl.Pl[pid].Stop()
+	delete(pl.Pl, pid)
 	if err != nil {
 		panic("can't Stop prober " + strconv.Itoa(pid))
+	}
+	return nil
+}
+
+// 删除所有的运行的探测器
+func (pl ProberList) DeleteProber() error {
+	for k, _ := range pl.Pl {
+		err := pl.DeleteProberById(k)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -61,9 +77,9 @@ type Prober struct {
 	AllAddr     int      `json:"allAddr"`     // 总共需要探测的地址数
 	ScannedAddr int      `json:"scannedAddr"` // 已探测过的地址数
 	Pid         int      `json:"pid"`         // 探测器ID
-	loop        bool     `json:"loop"`        //是否持续探测
+	Loop        bool     `json:"loop"`        //是否持续探测
 	m           sync.Mutex
-	sigstop     chan int // stop信号管道
+	stop        chan bool // stop信号量
 	c           *dns.Client
 	wg          sync.WaitGroup //协程运行池
 	worker      int            //最大协程数
@@ -93,10 +109,11 @@ func (p *Prober) SetArg(arg map[string][]string) {
 	}
 	// 是否持续探测，默认只探测一次
 	if v, ok := arg[ploop]; ok && v[0] == "1" {
-		p.loop = true
+		p.Loop = true
 	} else {
-		p.loop = defaultPloop
+		p.Loop = defaultPloop
 	}
+	p.stop = make(chan bool)
 	p.ScannedAddr = 0
 	p.worker = defaultMaxGRout
 	p.c = new(dns.Client)
@@ -106,16 +123,25 @@ func (p *Prober) SetArg(arg map[string][]string) {
 
 // Start 探测代码
 func (p *Prober) Start() error {
+	ctx := context.Background()
+	ctx, cancel := context.WithCancel(ctx)
 	if p.Prange[0] == defaultPrange {
 		//	全球探测
-		go p.startGlobScan()
-
+		go p.startGlobScan(ctx)
 	}
+	go func() {
+		if t, ok := <-p.stop; ok {
+			if t == true {
+				close(p.stop)
+				cancel()
+			}
+		}
+	}()
 	return nil
 }
 
 func (p *Prober) Stop() error {
-	p.sigstop <- 1
+	p.stop <- true
 	return nil
 }
 

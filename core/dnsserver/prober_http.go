@@ -179,10 +179,14 @@ func (p *ProberHTTP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		case "stop":
 			//TODO:探测停止
-			//if n,pok:=param["pid"];pok{
-			//
-			//	return
-			//}
+			if n, pok := param["pid"]; pok {
+				id, _ := strconv.Atoi(n[0])
+				err := p.proberlist.DeleteProberById(id)
+				if err != nil {
+					return
+				}
+				return
+			}
 			//	无额外参数代表停止所有探测
 
 		}

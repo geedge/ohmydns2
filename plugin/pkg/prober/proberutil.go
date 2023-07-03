@@ -2,6 +2,7 @@ package prober
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"fmt"
 	"math"
@@ -68,39 +69,46 @@ func ip2Eid(ip net.IP) string {
 	return strings.ReplaceAll(i, ".", "-")
 }
 
-func (p *Prober) startGlobScan() {
+func (p *Prober) startGlobScan(ctx context.Context) {
 
 	p.wg.Add(p.worker)
 	count := p.worker
 	round := 1
-	if p.loop {
+	if p.Loop {
 		round = math.MaxInt
 	}
 	for {
 		ipc := GenGlobIPv4()
 		for {
-			ip, ok := <-ipc
-			if ok {
-				go func() {
-					_ = p.Probe(ip)
-					p.ScannedAddr += 1
-					p.wg.Done()
-				}()
-
+			if ip, ok := <-ipc; ok {
+				select {
+				case <-ctx.Done():
+					// 中途取消
+					return
+				default:
+					go func() {
+						_ = p.Probe(ip)
+						p.ScannedAddr += 1
+						p.wg.Done()
+					}()
+					count -= 1
+					if count == 0 {
+						p.wg.Wait()
+						// 一批次全部完成，开始下一批次
+						count = p.worker
+						p.wg.Add(p.worker)
+					}
+				}
 			} else {
+				// 一轮扫描完成
+				round -= 1
+				// 探测轮数归零，退出
+				if round == 0 {
+					return
+				}
+				// 未归零，开始下一轮
 				break
 			}
-			count -= 1
-			if count == 0 {
-				p.wg.Wait()
-				count = p.worker
-				p.wg.Add(p.worker)
-			}
-		}
-		// 探测轮数归零，退出
-		round -= 1
-		if round == 0 {
-			break
 		}
 	}
 }
