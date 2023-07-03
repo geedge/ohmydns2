@@ -43,7 +43,7 @@ func (e expobject) Stop() {
 	defer cancel()
 	defer close(e.isAll)
 	ticker := time.NewTicker(1 * time.Second)
-	for _ = range ticker.C {
+	for range ticker.C {
 		select {
 		case <-ctx.Done():
 			break
