@@ -218,7 +218,7 @@ func (v V64dns) ResponseCNAME(msg *dns.Msg, sip net.IP) *dns.Msg {
 			maskPart += qs + "."
 		case 2:
 			subdomain = qs
-			newsubdomain = changeSubDomain(qs)
+			newsubdomain = v.changeSubDomain(qs)
 		case 5:
 			expid = qs
 		case 4:

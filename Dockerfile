@@ -15,9 +15,9 @@ RUN go env -w GO111MODULE=on;\
     apt-get -yyqq upgrade ; \
     apt-get -yyqq install ca-certificates libcap2-bin; \
     apt-get clean; \
-    go build -o ./ohmydns2 ./
+    go build -o ./ ./
 #  生成部署
-FROM python:3
+FROM python:3.9.17
 WORKDIR /project/ohmydns2
 COPY --from=0 /project/ohmydns2/ /project/ohmydns2/
 # 2115是prober默认端口
@@ -25,11 +25,11 @@ EXPOSE 2115/tcp 53/tcp 53/udp 1153/udp 1153/tcp
 # 先启动Python服务再启动OhMydns
 COPY plugin/v64dns/analyze/pb/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt;\
-    mkdir "config";\
-    mkdir "data";\
-    ln "-s plugin/v64dns/analyze/data data"
-CMD [ "python", "./plugin/v64dns/analyze/pb/analyzer.py" ]
-ENTRYPOINT ["./ohmydns2"]
+    mkdir config;\
+    mkdir data;\
+    ln -s plugin/v64dns/analyze/data data;
+# 不要使用ENTRYPOINT，否则CMD会被当作参数执行
+CMD "./ohmydns2";python3 ./plugin/v64dns/analyze/pb/analyzer.py
 
 
 

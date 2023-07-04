@@ -116,14 +116,15 @@ func (v V64dns) MatchType(s string) int {
 	return 3
 }
 
-func changeSubDomain(s string) string {
+func (v V64dns) changeSubDomain(s string) string {
 	switch s {
-	case "v4":
-		return "v6"
-	case "v6":
-		return "v4"
+	case v.p.v4subdomain:
+		return v.p.v6subdomain
+	case v.p.v6subdomain:
+		return v.p.v4subdomain
 	default:
-		panic("子域名错误！")
+		log.Error("子域名错误")
+		return "v64"
 	}
 }
 
