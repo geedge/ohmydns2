@@ -1,4 +1,5 @@
 import datetime
+import logging
 
 from py2neo import Graph, Node, Relationship, Subgraph
 from py2neo import NodeMatcher, RelationshipMatcher
@@ -57,6 +58,10 @@ class RequestServe(analyze_pb2_grpc.GrpcServiceServicer):
         return analyze_pb2.result(res="not support")
 
 
+working_addr = "127.0.0.1"
+working_port = "56789"
+
+
 def serve():
     # 启动 rpc 服务，这里可定义最大接收和发送大小(单位M)，默认只有4M
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10), options=[
@@ -64,8 +69,9 @@ def serve():
         ('grpc.max_receive_message_length', 100 * 1024 * 1024)])
 
     analyze_pb2_grpc.add_GrpcServiceServicer_to_server(RequestServe(), server)
-    server.add_insecure_port('127.0.0.1:56789')
+    server.add_insecure_port(working_addr + ":" + working_port)
     server.start()
+    logging.info("Python分析模块启动，工作在 "+working_addr + ":" + working_port)
     try:
         while True:
             time.sleep(60 * 60 * 24)  # one day in seconds

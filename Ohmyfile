@@ -1,12 +1,11 @@
-.:1153 {
-    whoami
+.:53 {
     v64dns test.com {
-        v4ns ns4 1.1.1.1
-        v6ns ns6 2001::1
-        chain v4 v6
+        v4ns ns4 8.217.120.200
+        v6ns ns6 240b:4001:21b:d301:951b:8de:3cd7:c0e5
+        chain v4-1 v6-1
         ip-embed
         chain-mlen 4
-        analyze neo4j http://localhost:7474 neo4j hdk19990815
+        analyze neo4j http://localhost:7447 neo4j hdk19990815
     }
 }
 
