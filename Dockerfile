@@ -29,7 +29,7 @@ RUN pip install --no-cache-dir -r requirements.txt;\
     mkdir data;\
     ln -s plugin/v64dns/analyze/data data;
 # 不要使用ENTRYPOINT，否则CMD会被当作参数执行
-CMD "./ohmydns2";python3 ./plugin/v64dns/analyze/pb/analyzer.py
+CMD /bin/bash -c "source ./start.sh"
 
 
 

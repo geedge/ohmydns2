@@ -1,3 +1,5 @@
+
+#!coding=utf-8
 import datetime
 import logging
 
@@ -10,6 +12,8 @@ import analyze_pb2
 import analyze_pb2_grpc
 import analyzedutil as aul
 
+logging.basicConfig(level=logging.DEBUG,
+                    format='%(asctime)s - %(filename)s[line:%(lineno)d] - %(levelname)s: %(message)s')
 
 class node:
     ip = ""
@@ -41,9 +45,6 @@ class node:
 class RequestServe(analyze_pb2_grpc.GrpcServiceServicer):
     graph_conn = ""
 
-    def __init__(self):
-        self.graph_conn = neo4j_connector()
-
     def AnalyzeService(self, request, context):
         '''
         具体实现AnalyzeService服务方法
@@ -53,6 +54,9 @@ class RequestServe(analyze_pb2_grpc.GrpcServiceServicer):
         '''
         r = request
         if r.gtype == "neo4j":
+            if self.graph_conn=="":
+                self.graph_conn = neo4j_connector(r.guri,r.guser,r.gpass)
+                print("已连接到图数据库Neo4j:"+r.guri)
             result = self.graph_conn.work_with_neoj_53(r.data)
             return analyze_pb2.result(res=result)
         return analyze_pb2.result(res="not support")
@@ -71,7 +75,7 @@ def serve():
     analyze_pb2_grpc.add_GrpcServiceServicer_to_server(RequestServe(), server)
     server.add_insecure_port(working_addr + ":" + working_port)
     server.start()
-    logging.info("Python分析模块启动，工作在 "+working_addr + ":" + working_port)
+    print("Python分析模块启动，工作在 "+working_addr + ":" + working_port)
     try:
         while True:
             time.sleep(60 * 60 * 24)  # one day in seconds
@@ -84,7 +88,7 @@ class neo4j_connector:
     nodematcher = ""
     relatmatcher = ""
 
-    def __int__(self, guri, guser, gpass):
+    def __init__(self, guri, guser, gpass):
         # 连接neo4j
         self.graph = Graph(guri, auth=(guser, gpass), name="neo4j")
         self.nodematcher = NodeMatcher(self.graph)

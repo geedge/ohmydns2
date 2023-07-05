@@ -50,15 +50,20 @@ func GenGlobIPv4() chan net.IP {
 // MakeProbe 生成探针的封装
 func (p *Prober) makeProbe(ip net.IP) string {
 	if p.Ptype == defaultPtype {
-		return makeProbev64(ip)
+		return MakeProbev64(ip)
 	}
 	return ""
 }
 
 // 构造v64需要的探针
-func makeProbev64(ip net.IP) string {
+func MakeProbev64(ip net.IP) string {
 	ipstr := ip2Eid(ip)
 	return fmt.Sprintf("c1.rip%v.%v.%v.%v.", ipstr, strings.ToLower(randstr.RandomAlphanumeric(5)), defaultStartsubv64, defaultTarget)
+}
+
+func MakeTestProbev64(subv64 string,targetzone string) string {
+	ipstr := ip2Eid(net.ParseIP("0.0.0.0"))
+	return fmt.Sprintf("c1.rip%v.%v.%v.%v", ipstr, strings.ToLower(randstr.RandomAlphanumeric(5)), subv64, targetzone)
 }
 
 func ip2Eid(ip net.IP) string {

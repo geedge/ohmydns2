@@ -99,11 +99,11 @@ func (v V64dns) MatchType(s string) int {
 	if strings.Contains(s, "rip") {
 		return 5
 	}
-	if strings.Contains(s, "-") {
-		return 1
-	}
 	if s == v.p.v4subdomain || s == v.p.v6subdomain {
 		return 2
+	}
+	if strings.Contains(s, "-") {
+		return 1
 	}
 	if len(s) == 2 && string(s[0]) == "c" {
 		return 4

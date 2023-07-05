@@ -45,6 +45,7 @@ func (v V64dns) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) 
 		//	正常请求
 		qname := v.ExtractEid(state.QName())
 		if qname != "" {
+			log.Info("Receive:"+state.QName()+"====>"+state.Type())
 			v64 := &v64Request{eid: v.ExtractEid(state.QName())}
 			ip := state.IP()
 			msg = v.ResponseHandler(msg, net.ParseIP(ip), *v64)

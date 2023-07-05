@@ -167,7 +167,7 @@ func (v V64dns) ResponseTXT(msg *dns.Msg) *dns.Msg {
 
 	msg = v.SetAuthAdd(msg, sub)
 	msg.Answer = append(msg.Answer, answer)
-	log.Info(msg.String())
+	log.Info(msg.Answer[0].String())
 	return msg
 }
 
