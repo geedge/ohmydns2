@@ -65,6 +65,7 @@ func NewServer(addr string, group []*Config) (*Server, error) {
 		writeTimeout: 5 * time.Second,
 		tsigSecret:   make(map[string]string),
 	}
+	log.Infof("Do53服务启动，监听地址: %v", addr)
 
 	// We have to bound our wg with one increment
 	// to prevent a "race condition" that is hard-coded
@@ -195,7 +196,6 @@ func (s *Server) WrapListener(ln net.Listener) net.Listener {
 
 // ListenPacket implements caddy.UDPServer interface.
 func (s *Server) ListenPacket() (net.PacketConn, error) {
-	log.Info(s.Addr[len(transport.DNS+"://"):])
 	p, err := reuseport.ListenPacket("udp", s.Addr[len(transport.DNS+"://"):])
 	if err != nil {
 		return nil, err

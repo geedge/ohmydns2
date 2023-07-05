@@ -102,7 +102,7 @@ func (v V64dns) MatchType(s string) int {
 	if s == v.p.v4subdomain || s == v.p.v6subdomain {
 		return 2
 	}
-	if strings.Contains(s, "-") &&len(s)>5 {
+	if strings.Contains(s, "-") && len(s) > 5 {
 		return 1
 	}
 	if len(s) == 2 && string(s[0]) == "c" {
@@ -157,12 +157,11 @@ func (v V64dns) ExtractEid(qname string) string {
 	return ""
 }
 
-func ip2id(ip net.IP)string{
-	i:=ip.String()
-	if strings.Contains(i, "."){
-		strings.ReplaceAll(i, ".", "-")
-	} else{
-		strings.ReplaceAll(i, ":", "-")
+func ip2id(ip net.IP) string {
+	i := ip.String()
+	if strings.Contains(i, ".") {
+		return strings.ReplaceAll(i, ".", "-")
+	} else {
+		return strings.ReplaceAll(i, ":", "-")
 	}
-	return i
 }
