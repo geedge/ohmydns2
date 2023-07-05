@@ -113,6 +113,7 @@ func (el *explist) Add(eid string, sip net.IP) {
 
 func (v V64dns) ResponseHandler(msg *dns.Msg, sip net.IP, v64r v64Request) *dns.Msg {
 	step, _ := strconv.Atoi(string(rune(strings.Split(msg.Question[0].Name, ".")[0][1])))
+	log.Info(sip.String())
 	switch msg.Question[0].Qtype {
 	case dns.TypeTXT, dns.TypeCNAME:
 		if eo, ok := EL.l[v64r.eid]; ok {
@@ -136,11 +137,13 @@ func (v V64dns) ResponseHandler(msg *dns.Msg, sip net.IP, v64r v64Request) *dns.
 		}
 		// 新的实验，响应CNAME
 		EL.Add(v64r.eid, sip)
+		log.Info("1")
 		return v.ResponseCNAME(msg, sip)
 
 	case dns.TypeNS:
 		return v.ResponseNS(msg)
 	default:
+		log.Info("no")
 		// 不符合要求的请求类型直接返回空响应
 		return msg
 	}
@@ -201,6 +204,7 @@ func (v V64dns) ResponseNS(msg *dns.Msg) *dns.Msg {
 
 // ResponseCNAME 响应CNAME记录
 func (v V64dns) ResponseCNAME(msg *dns.Msg, sip net.IP) *dns.Msg {
+	println("cname")
 	qname := msg.Question[0].Name
 	var (
 		maskPart     = ""
@@ -232,7 +236,7 @@ func (v V64dns) ResponseCNAME(msg *dns.Msg, sip net.IP) *dns.Msg {
 
 		}
 	}
-	maskPart = maskPart + strings.ReplaceAll(sip.String(), ".", "-")
+	maskPart = maskPart + ip2id(sip)
 	answer := new(dns.CNAME)
 	answer.Hdr = dns.RR_Header{
 		Name:   qname,

@@ -1,7 +1,7 @@
 .:53 {
     v64dns n64.top {
-        v4ns ns4 8.217.120.200
-        v6ns ns6 240b:4001:21b:d301:951b:8de:3cd7:c0e5
+        v4ns ns4-1 8.217.120.200
+        v6ns ns6-1 240b:4001:21b:d301:951b:8de:3cd7:c0e5
         chain v4-1 v6-1
         ip-embed
         chain-mlen 4
