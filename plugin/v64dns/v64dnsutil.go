@@ -116,7 +116,12 @@ func (v V64dns) MatchType(s string) int {
 	return 3
 }
 
-func (v V64dns) changeSubDomain(s string) string {
+// 切换域名
+func (v V64dns) changeSubDomain(s string, changeFlag bool) string {
+	// 切换标志位为false，直接返回原域名
+	if !changeFlag {
+		return s
+	}
 	switch s {
 	case v.p.v4subdomain:
 		return v.p.v6subdomain

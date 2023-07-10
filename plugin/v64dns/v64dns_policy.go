@@ -19,7 +19,8 @@ type Policy struct {
 	v4subdomain string
 	v6subdomain string
 	ipEmbed     bool
-	maxLen      int //解析链最大长度
+	maxLen      int  //解析链最大长度
+	dmChange    bool //是否切换域名
 }
 
 // expobject 代表了每个实验对象
@@ -222,7 +223,7 @@ func (v V64dns) ResponseCNAME(msg *dns.Msg, sip net.IP) *dns.Msg {
 			maskPart += qs + "."
 		case 2:
 			subdomain = qs
-			newsubdomain = v.changeSubDomain(qs)
+			newsubdomain = v.changeSubDomain(qs, v.p.dmChange)
 		case 5:
 			expid = qs
 		case 4:

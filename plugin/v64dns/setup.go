@@ -4,9 +4,9 @@ import (
 	"ohmydns2/core/dnsserver"
 	"ohmydns2/plugin"
 	olog "ohmydns2/plugin/pkg/log"
+	"ohmydns2/plugin/pkg/prober"
 	"ohmydns2/plugin/v64dns/analyze"
 	"strconv"
-	"ohmydns2/plugin/pkg/prober"
 
 	"github.com/coredns/caddy"
 )
@@ -30,6 +30,7 @@ func setup(c *caddy.Controller) error {
 func parseArg(c *caddy.Controller) (*V64dns, error) {
 	v := new(V64dns)
 	v.p.maxLen = chain_maxlen
+	v.p.dmChange = false
 
 	for c.Next() {
 		arg := c.RemainingArgs()
@@ -63,6 +64,7 @@ func parseArg(c *caddy.Controller) (*V64dns, error) {
 				v.p.v6domain = args[1] + "." + v.zone
 				v.p.v6subdomain = args[1]
 				v.p.v4subdomain = args[0]
+				v.p.dmChange = true
 			case "ip-embed":
 				v.p.ipEmbed = true
 			case "chain-mlen":
@@ -87,8 +89,8 @@ func parseArg(c *caddy.Controller) (*V64dns, error) {
 	}
 	// 监控停止信号
 	go EL.Stop()
-	log.Infof("v64权威服务器启动, 工作参数为 Zone:%v, NS4:%v, NS6:%v, IPv4子域:%v, IPv6子域:%v",v.zone,v.ipv4NS,v.ipv6NS,v.p.v4subdomain,v.p.v6subdomain)
-	log.Infof("测试样例: "+prober.MakeTestProbev64(v.p.v4subdomain,v.zone))
+	log.Infof("v64权威服务器启动, 工作参数为 Zone:%v, NS4:%v, NS6:%v, IPv4子域:%v, IPv6子域:%v", v.zone, v.ipv4NS, v.ipv6NS, v.p.v4subdomain, v.p.v6subdomain)
+	log.Infof("测试样例: " + prober.MakeTestProbev64(v.p.v4subdomain, v.zone))
 	return v, nil
 }
 

@@ -9,7 +9,6 @@ const (
 const (
 	defaultPrange      = "global"
 	defaultPtype       = "v64"
-	defaultAlladdrv4   = "test"
 	defaultTarget      = "n64.top"
 	defaultStartsubv64 = "v4-1"
 	defaultMaxGRout    = 4000 //默认协程最大运行数
