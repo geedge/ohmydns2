@@ -3,10 +3,8 @@ package dnsserver
 import (
 	"fmt"
 	"ohmydns2/plugin/pkg/dnsutil"
-	"ohmydns2/plugin/pkg/transport"
 	"regexp"
 	"sort"
-	"strings"
 )
 
 // checkZoneSyntax() checks whether the given string match 1035 Preferred Syntax or not.
@@ -35,10 +33,10 @@ func startUpZones(protocol, addr string, zones map[string][]*Config) string {
 	sort.Strings(keys)
 
 	for _, zone := range keys {
-		if strings.HasPrefix(protocol, "prober") {
-			s += fmt.Sprintln("探测服务启动，访问路径为" + "http://" + proberurl + ":" + transport.PHTTPPort + proberPath)
-			continue
-		}
+		//if strings.HasPrefix(protocol, "prober") {
+		//	s += fmt.Sprintln("探测服务启动，访问路径为" + "http://" + prober.proberurl + ":" + transport.PHTTPPort + prober.proberPath)
+		//	continue
+		//}
 		if !checkZoneSyntax(zone) {
 			s += fmt.Sprintf("Warning: Domain %q does not follow RFC1035 preferred syntax\n", zone)
 		}

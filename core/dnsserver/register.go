@@ -174,19 +174,19 @@ func (h *dnsContext) MakeServers() ([]caddy.Server, error) {
 				return nil, err
 			}
 			servers = append(servers, s)
-		// 暂不启用grpc传输
+		//暂不启用grpc传输
 		//case transport.GRPC:
 		//	s, err := NewServergRPC(addr, group)
 		//	if err != nil {
 		//		return nil, err
 		//	}
 		//	servers = append(servers, s)
-		case transport.PROBER:
-			s, err := NewProberHTTP(addr, group)
-			if err != nil {
-				return nil, err
-			}
-			servers = append(servers, s)
+		//case transport.PROBER:
+		//	s, err := prober.NewProberHTTP(addr, group)
+		//	if err != nil {
+		//		return nil, err
+		//	}
+		//	servers = append(servers, s)
 		case transport.HTTPS:
 			s, err := NewServerHTTPS(addr, group)
 			if err != nil {

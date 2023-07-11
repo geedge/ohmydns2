@@ -1,0 +1,19 @@
+package prober
+
+// Directives are registered in the order they should be
+// executed.
+//
+// Ordering is VERY important. Every plugin will
+// feel the effects of all other plugin below
+// (after) them during a request, but they must not
+// care what plugin above them are doing.
+var Directives = []string{
+	"log",
+	"dnstap",
+	"debug",
+	"prometheus",
+	"forward",
+	"metadata",
+	"v64dns",
+	"whoami",
+}

@@ -1,4 +1,4 @@
-package dnsserver
+package prober
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	stdlog "log"
 	"net"
 	"net/http"
+	"ohmydns2/core/dnsserver"
 	ohttp "ohmydns2/plugin/pkg/http"
 	"ohmydns2/plugin/pkg/prober"
 	"ohmydns2/plugin/pkg/reuseport"
@@ -24,7 +25,7 @@ type ProberWriter struct {
 }
 
 type ProberHTTP struct {
-	*Server
+	*dnsserver.Server
 	httpServer   *http.Server
 	listenAddr   net.Addr
 	validRequest func(*http.Request) bool
@@ -44,8 +45,8 @@ type newret struct {
 }
 
 // NewProberHTTP returns a new ohmydns prober(可用HTTP调用参数) and compiles all plugins in to it.
-func NewProberHTTP(addr string, group []*Config) (*ProberHTTP, error) {
-	s, err := NewServer(addr, group)
+func NewProberHTTP(addr string, group []*dnsserver.Config) (*ProberHTTP, error) {
+	s, err := dnsserver.NewServer(addr, group)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +66,7 @@ func NewProberHTTP(addr string, group []*Config) (*ProberHTTP, error) {
 		ReadTimeout:  s.readTimeout,
 		WriteTimeout: s.writeTimeout,
 		IdleTimeout:  s.idleTimeout,
-		ErrorLog:     stdlog.New(&loggerAdapter{}, "", 0),
+		ErrorLog:     stdlog.New(&dnsserver.loggerAdapter{}, "", 0),
 	}
 
 	pl := &prober.ProberList{
@@ -80,7 +81,7 @@ func NewProberHTTP(addr string, group []*Config) (*ProberHTTP, error) {
 }
 
 // Compile-time check to ensure Server implements the caddy.GracefulServer interface
-var _ caddy.GracefulServer = &Server{}
+var _ caddy.GracefulServer = &dnsserver.Server{}
 
 // Serve implements caddy.TCPServer interface.
 func (p *ProberHTTP) Serve(l net.Listener) error {
@@ -109,11 +110,11 @@ func (p *ProberHTTP) ListenPacket() (net.PacketConn, error) { return nil, nil }
 // OnStartupComplete lists the sites served by this server
 // and any relevant information, assuming Quiet is false.
 func (p *ProberHTTP) OnStartupComplete() {
-	if Quiet {
+	if dnsserver.Quiet {
 		return
 	}
 
-	out := startUpZones(transport.PROBER+"://", p.Addr, p.zones)
+	out := dnsserver.startUpZones(transport.PROBER+"://", p.Addr, p.zones)
 	if out != "" {
 		fmt.Print(out)
 	}

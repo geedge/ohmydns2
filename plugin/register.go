@@ -9,3 +9,11 @@ func Register(name string, action caddy.SetupFunc) {
 		Action:     action,
 	})
 }
+
+// ProbeRegister registers your plugin with OhmyDNS2 and allows it to be called when the prober is running.
+func ProbeRegister(name string, action caddy.SetupFunc) {
+	caddy.RegisterPlugin(name, caddy.Plugin{
+		ServerType: "dns",
+		Action:     action,
+	})
+}

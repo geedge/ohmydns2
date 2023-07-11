@@ -21,5 +21,5 @@ const (
 	// HTTPSPort is the default port for DNS-over-HTTPS.
 	HTTPSPort = "443"
 	// PHTTPPort 是默认的探测器api调用端口
-	PHTTPPort = "2115"
+	PROBERPort = "2115"
 )

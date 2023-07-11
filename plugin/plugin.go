@@ -96,7 +96,7 @@ func ClientWrite(rcode int) bool {
 }
 
 // Namespace is the namespace used for the metrics.
-const Namespace = "coredns"
+const Namespace = "ohmydns2"
 
 // 普罗米修斯监控
 // TimeBuckets is based on Prometheus client_golang prometheus.DefBuckets

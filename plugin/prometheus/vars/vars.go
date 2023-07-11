@@ -71,10 +71,17 @@ var (
 		Name:      "https_responses_total",
 		Help:      "Counter of DoH responses per server and http status code.",
 	}, []string{"server", "status"})
+	HTTPResponsesCount = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: plugin.Namespace,
+		Subsystem: probesubsystem,
+		Name:      "http_responses_total",
+		Help:      "Counter of HTTP responses per server and http status code.",
+	}, []string{"server", "status"})
 )
 
 const (
-	subsystem = "dns"
+	subsystem      = "dns"
+	probesubsystem = "probe"
 
 	// Dropped indicates we dropped the query before any handling. It has no closing dot, so it can not be a valid zone.
 	Dropped = "dropped"
