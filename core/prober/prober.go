@@ -284,7 +284,7 @@ func (ps *ProbeServer) ServeHTTP(ctx context.Context, w http.ResponseWriter, req
 	)
 
 	for {
-		if z, ok := ps.zones[q[off:]]; ok {
+		if z, ok := ps.zones[target[off:]]; ok {
 			for _, h := range z {
 				if h.pluginChain == nil { // zone defined, but has not got any plugins
 					errorAndMetricsFunc(ps.Addr, w, r, http.StatusNotImplemented)
