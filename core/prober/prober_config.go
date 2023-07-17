@@ -6,13 +6,12 @@ import (
 	"fmt"
 	"github.com/coredns/caddy"
 	"net/http"
-	"ohmydns2/core/dnsserver"
 	"ohmydns2/plugin"
 	"ohmydns2/plugin/pkg/request"
 	"time"
 )
 
-// Config configuration for a single server.
+// PBConfig configuration for a single prober.
 type PBConfig struct {
 
 	// one or several hostnames to bind the server to.
@@ -73,14 +72,14 @@ type PBConfig struct {
 
 	// firstConfigInBlock is used to reference the first config in a server block, for the
 	// purpose of sharing single instance of each plugin among all zones in a server block.
-	firstConfigInBlock *dnsserver.Config
+	firstConfigInBlock *PBConfig
 
 	// metaCollector references the first MetadataCollector plugin, if one exists
-	metaCollector dnsserver.MetadataCollector
+	metaCollector ProberMetadataCollector
 }
 
 // FilterFunc is a function that filters requests from the Config
-type FilterFunc func(context.Context, *request.Request) bool
+type FilterFunc func(context.Context, *request.HTTPRequest) bool
 
 // keyForConfig builds a key for identifying the configs during setup time
 func keyForConfig(blocIndex int, blocKeyIndex int) string {
@@ -90,7 +89,7 @@ func keyForConfig(blocIndex int, blocKeyIndex int) string {
 // GetConfig gets the Config that corresponds to c.
 // If none exist nil is returned.
 func GetPBConfig(c *caddy.Controller) *PBConfig {
-	ctx := c.Context().(probeContext)
+	ctx := c.Context().(*probeContext)
 	key := keyForConfig(c.ServerBlockIndex, c.ServerBlockKeyIndex)
 	if cfg, ok := ctx.keysToConfigs[key]; ok {
 		return cfg
@@ -99,5 +98,5 @@ func GetPBConfig(c *caddy.Controller) *PBConfig {
 	// actions typically skip the server blocks where we make
 	// the configs.
 	ctx.saveConfig(key, &PBConfig{ListenHosts: []string{""}})
-	return PBGetConfig(c)
+	return GetPBConfig(c)
 }

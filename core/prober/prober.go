@@ -11,7 +11,7 @@ import (
 	"net/http"
 	"ohmydns2/plugin"
 	ohttp "ohmydns2/plugin/pkg/http"
-	"ohmydns2/plugin/pkg/log"
+	olog "ohmydns2/plugin/pkg/log"
 	"ohmydns2/plugin/pkg/request"
 	"ohmydns2/plugin/pkg/reuseport"
 	"ohmydns2/plugin/pkg/trace"
@@ -48,15 +48,15 @@ type ProbeServer struct {
 	tsigSecret map[string]string
 }
 
-// Response 是Prober控制响应的抽象
-type Response struct {
+// response 是Prober控制响应的抽象
+type response struct {
 	Code int    `json:"code"`
 	Msg  string `json:"msg"`
 }
 
 // MetadataCollector is a plugin that can retrieve metadata functions from all metadata providing plugins
-type MetadataCollector interface {
-	Collect(context.Context, request.Request) context.Context
+type ProberMetadataCollector interface {
+	Collect(context.Context, request.HTTPRequest) context.Context
 }
 
 // NewServer returns a new OhmyDNS2 probe server and compiles all plugins in to it.
@@ -70,7 +70,7 @@ func NewServer(addr string, group []*PBConfig) (*ProbeServer, error) {
 		writeTimeout: 5 * time.Second,
 		tsigSecret:   make(map[string]string),
 	}
-	log.Infof("服务启动，监听地址: %v", addr)
+	olog.Infof("服务启动，监听地址: %v", addr)
 
 	// We have to bound our wg with one increment
 	// to prevent a "race condition" that is hard-coded
@@ -83,7 +83,7 @@ func NewServer(addr string, group []*PBConfig) (*ProbeServer, error) {
 	for _, site := range group {
 		if site.Debug {
 			s.debug = true
-			log.D.Set()
+			olog.D.Set()
 		}
 		s.stacktrace = site.Stacktrace
 
@@ -116,7 +116,7 @@ func NewServer(addr string, group []*PBConfig) (*ProbeServer, error) {
 
 			// If the current plugin is a MetadataCollector, bookmark it for later use. This loop traverses the plugin
 			// list backwards, so the first MetadataCollector plugin wins.
-			if mdc, ok := stack.(MetadataCollector); ok {
+			if mdc, ok := stack.(ProberMetadataCollector); ok {
 				site.metaCollector = mdc
 			}
 
@@ -137,7 +137,7 @@ func NewServer(addr string, group []*PBConfig) (*ProbeServer, error) {
 
 	if !s.debug {
 		// When reloading we need to explicitly disable debug logging if it is now disabled.
-		log.D.Clear()
+		olog.D.Clear()
 	}
 
 	return s, nil
@@ -179,7 +179,7 @@ func (ps *ProbeServer) Serve(l net.Listener) error {
 
 	ps.m.Unlock()
 
-	return ps.server.ActivateAndServe()
+	return ps.server.ListenAndServe()
 }
 
 // ServePacket starts the server with an existing packetconn. It blocks until the server stops.
@@ -262,9 +262,9 @@ func (ps *ProbeServer) ServeHTTP(ctx context.Context, w http.ResponseWriter, req
 			// need to make sure that we stay alive up here
 			if rec := recover(); rec != nil {
 				if ps.stacktrace {
-					log.Errorf("Recovered from panic in server: %q %v\n%s", ps.Addr, rec, string(debug.Stack()))
+					olog.Errorf("Recovered from panic in server: %q %v\n%s", ps.Addr, rec, string(debug.Stack()))
 				} else {
-					log.Errorf("Recovered from panic in server: %q %v", ps.Addr, rec)
+					olog.Errorf("Recovered from panic in server: %q %v", ps.Addr, rec)
 				}
 				vars.Panic.Inc()
 				errorAndMetricsFunc(ps.Addr, w, "ProbeServer-ServeHTTP-Error", http.StatusInternalServerError)
@@ -273,7 +273,7 @@ func (ps *ProbeServer) ServeHTTP(ctx context.Context, w http.ResponseWriter, req
 	}
 
 	// Wrap the response writer in a ScrubWriter so we automatically make the reply fit in the client's buffer.
-	w = request.NewScrubWriter(r, w)
+	//w = request.NewScrubWriter(r, w)
 
 	// 获取请求参数
 	target, _ := ohttp.ParseRequest(req)
@@ -282,29 +282,33 @@ func (ps *ProbeServer) ServeHTTP(ctx context.Context, w http.ResponseWriter, req
 		end       bool
 		dshandler *PBConfig
 	)
+	// 用于探测的客户端
+	c := new(dns.Client)
+	msg := new(dns.Msg)
 
 	for {
 		if z, ok := ps.zones[target[off:]]; ok {
+
 			for _, h := range z {
 				if h.pluginChain == nil { // zone defined, but has not got any plugins
-					errorAndMetricsFunc(ps.Addr, w, r, http.StatusNotImplemented)
+					errorAndMetricsFunc(ps.Addr, w, "探测器缺少插件链", http.StatusNotImplemented)
 					return
 				}
 
 				if h.metaCollector != nil {
 					// Collect metadata now, so it can be used before we send a request down the plugin chain.
-					ctx = h.metaCollector.Collect(ctx, request.Request{Req: r, W: w})
+					ctx = h.metaCollector.Collect(ctx, request.HTTPRequest{Req: req, W: w})
 				}
 
 				// If all filter funcs pass, use this config.
-				if passAllFilterFuncs(ctx, h.FilterFuncs, &request.Request{Req: r, W: w}) {
+				if passAllFilterFuncs(ctx, h.FilterFuncs, &request.HTTPRequest{Req: req, W: w}) {
 					if h.ViewName != "" {
 						// if there was a view defined for this Config, set the view name in the context
 						ctx = context.WithValue(ctx, ViewKey{}, h.ViewName)
 					}
-					rcode, _ := h.pluginChain.ServeDNS(ctx, w, r)
-					if !plugin.ClientWrite(rcode) {
-						errorFunc(ps.Addr, w, r, rcode)
+					rcode, _ := h.pluginChain.ProbeDNS(ctx, c, msg)
+					if !plugin.HTTPClientWrite(rcode) {
+						errorAndMetricsFunc(ps.Addr, w, h.pluginChain.Name()+" 错误", rcode)
 					}
 					return
 
@@ -319,6 +323,7 @@ func (ps *ProbeServer) ServeHTTP(ctx context.Context, w http.ResponseWriter, req
 
 	// 都不匹配，尝试利用“.”指向的服务块
 	if z, ok := ps.zones["."]; ok {
+
 		for _, h := range z {
 			if h.pluginChain == nil {
 				continue
@@ -326,18 +331,18 @@ func (ps *ProbeServer) ServeHTTP(ctx context.Context, w http.ResponseWriter, req
 
 			if h.metaCollector != nil {
 				// Collect metadata now, so it can be used before we send a request down the plugin chain.
-				ctx = h.metaCollector.Collect(ctx, request.Request{Req: r, W: w})
+				ctx = h.metaCollector.Collect(ctx, request.HTTPRequest{Req: req, W: w})
 			}
 
 			// If all filter funcs pass, use this config.
-			if passAllFilterFuncs(ctx, h.FilterFuncs, &request.Request{Req: r, W: w}) {
+			if passAllFilterFuncs(ctx, h.FilterFuncs, &request.HTTPRequest{Req: req, W: w}) {
 				if h.ViewName != "" {
 					// if there was a view defined for this Config, set the view name in the context
 					ctx = context.WithValue(ctx, ViewKey{}, h.ViewName)
 				}
-				rcode, _ := h.pluginChain.ServeDNS(ctx, w, r)
+				rcode, _ := h.pluginChain.ProbeDNS(ctx, c, msg)
 				if !plugin.ClientWrite(rcode) {
-					errorFunc(s.Addr, w, r, rcode)
+					errorAndMetricsFunc(ps.Addr, w, " . --"+h.pluginChain.Name()+"错误", rcode)
 				}
 				return
 			}
@@ -345,11 +350,11 @@ func (ps *ProbeServer) ServeHTTP(ctx context.Context, w http.ResponseWriter, req
 	}
 
 	// Still here? Error out with REFUSED.
-	errorAndMetricsFunc(s.Addr, w, r, dns.RcodeRefused)
+	errorAndMetricsFunc(ps.Addr, w, "请求存在错误", http.StatusForbidden)
 }
 
 // passAllFilterFuncs returns true if all filter funcs evaluate to true for the given request
-func passAllFilterFuncs(ctx context.Context, filterFuncs []FilterFunc, req *request.Request) bool {
+func passAllFilterFuncs(ctx context.Context, filterFuncs []FilterFunc, req *request.HTTPRequest) bool {
 	for _, ff := range filterFuncs {
 		if !ff(ctx, req) {
 			return false
@@ -380,21 +385,11 @@ func (ps *ProbeServer) Tracer() ot.Tracer {
 	return ps.trace.Tracer()
 }
 
-// errorFunc responds to an DNS request with an error.
-func errorFunc(server string, w dns.ResponseWriter, r *dns.Msg, rc int) {
-	state := request.Request{W: w, Req: r}
-
-	answer := new(dns.Msg)
-	answer.SetRcode(r, rc)
-	state.SizeAndDo(answer)
-
-	w.WriteMsg(answer)
-}
-
+// errorAndMetricsFunc 通过HTTP返回错误信息，并记录到Metrics中
 func errorAndMetricsFunc(server string, w http.ResponseWriter, rs string, rc int) {
 	defer vars.HTTPResponsesCount.WithLabelValues(server, http.StatusText(rc)).Inc()
 	w.WriteHeader(rc)
-	r := &newret{Code: http.StatusInternalServerError, Msg: rs}
+	r := &response{Code: http.StatusInternalServerError, Msg: rs}
 	msg, _ := json.Marshal(r)
 	w.Write(msg)
 	return
@@ -403,7 +398,6 @@ func errorAndMetricsFunc(server string, w http.ResponseWriter, rs string, rc int
 
 const (
 	tcp = 0
-	udp = 1
 
 	tcpMaxQueries = -1
 )

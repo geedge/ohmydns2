@@ -29,7 +29,7 @@ type ServerHTTPS struct {
 	validRequest func(*http.Request) bool
 }
 
-// loggerAdapter is a simple adapter around CoreDNS logger made to implement io.Writer in order to log errors from HTTP server
+// loggerAdapter is a simple adapter around OhmyDNS logger made to implement io.Writer in order to log errors from HTTP server
 type loggerAdapter struct {
 }
 

@@ -9,11 +9,13 @@ import (
 	"net/http"
 	"ohmydns2/core/dnsserver"
 	ohttp "ohmydns2/plugin/pkg/http"
+	olog "ohmydns2/plugin/pkg/log"
 	"ohmydns2/plugin/pkg/prober"
 	"ohmydns2/plugin/pkg/reuseport"
 	"ohmydns2/plugin/pkg/transport"
 	"ohmydns2/plugin/prometheus/vars"
 	"strconv"
+	"sync"
 
 	"github.com/coredns/caddy"
 )
@@ -25,11 +27,12 @@ type ProberWriter struct {
 }
 
 type ProberHTTP struct {
-	*dnsserver.Server
+	*ProbeServer
 	httpServer   *http.Server
 	listenAddr   net.Addr
 	validRequest func(*http.Request) bool
 	proberlist   *prober.ProberList
+	m            sync.Mutex
 }
 
 type ret struct {
@@ -44,9 +47,18 @@ type newret struct {
 	Msg  string `json:"msg"`
 }
 
+// loggerAdapter is a simple adapter around CoreDNS logger made to implement io.Writer in order to log errors from HTTP server
+type loggerAdapter struct {
+}
+
+func (l *loggerAdapter) Write(p []byte) (n int, err error) {
+	olog.Debug(string(p))
+	return len(p), nil
+}
+
 // NewProberHTTP returns a new ohmydns prober(可用HTTP调用参数) and compiles all plugins in to it.
-func NewProberHTTP(addr string, group []*dnsserver.Config) (*ProberHTTP, error) {
-	s, err := dnsserver.NewServer(addr, group)
+func NewProberHTTP(addr string, group []*PBConfig) (*ProberHTTP, error) {
+	s, err := NewServer(addr, group)
 	if err != nil {
 		return nil, err
 	}
@@ -66,14 +78,14 @@ func NewProberHTTP(addr string, group []*dnsserver.Config) (*ProberHTTP, error) 
 		ReadTimeout:  s.readTimeout,
 		WriteTimeout: s.writeTimeout,
 		IdleTimeout:  s.idleTimeout,
-		ErrorLog:     stdlog.New(&dnsserver.loggerAdapter{}, "", 0),
+		ErrorLog:     stdlog.New(&loggerAdapter{}, "", 0),
 	}
 
 	pl := &prober.ProberList{
 		Pl: make(map[int]*prober.Prober),
 	}
 	sh := &ProberHTTP{
-		Server: s, httpServer: srv, validRequest: validator, proberlist: pl,
+		ProbeServer: s, httpServer: srv, validRequest: validator, proberlist: pl,
 	}
 	sh.httpServer.Handler = sh
 
@@ -110,11 +122,11 @@ func (p *ProberHTTP) ListenPacket() (net.PacketConn, error) { return nil, nil }
 // OnStartupComplete lists the sites served by this server
 // and any relevant information, assuming Quiet is false.
 func (p *ProberHTTP) OnStartupComplete() {
-	if dnsserver.Quiet {
+	if Quiet {
 		return
 	}
 
-	out := dnsserver.startUpZones(transport.PROBER+"://", p.Addr, p.zones)
+	out := startUpZones(transport.PROBER+"://", p.Addr, p.zones)
 	if out != "" {
 		fmt.Print(out)
 	}

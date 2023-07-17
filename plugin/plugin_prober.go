@@ -44,18 +44,18 @@ type (
 	// Otherwise, return values should be propagated down the plugin
 	// chain by returning them unchanged.
 	Prober interface {
-		ProbeDNS(context.Context, dns.Client, *dns.Msg) (int, error)
+		ProbeDNS(context.Context, *dns.Client, *dns.Msg) (int, error)
 		Name() string
 	}
 
 	// ProberFunc is a convenience type, except
 	// ProbeDNS returns an rcode and an error. See Handler
 	// documentation for more information.
-	ProberFunc func(context.Context, dns.Client, *dns.Msg) (int, error)
+	ProberFunc func(context.Context, *dns.Client, *dns.Msg) (int, error)
 )
 
 // ServeDNS implements the Handler interface.
-func (p ProberFunc) ProbeDNS(ctx context.Context, c dns.Client, msg *dns.Msg) (int, error) {
+func (p ProberFunc) ProbeDNS(ctx context.Context, c *dns.Client, msg *dns.Msg) (int, error) {
 	return p(ctx, c, msg)
 }
 
@@ -66,7 +66,7 @@ func (p ProberFunc) Name() string { return "proberfunc" }
 func PError(name string, err error) error { return fmt.Errorf("%s/%s: %s", "prober-plugin", name, err) }
 
 // PNextOrFailure  calls next.ProbeDNS when next is not nil, otherwise it will return, a ServerFailure and a `no next plugin found` error.
-func PNextOrFailure(name string, next Prober, ctx context.Context, c dns.Client, msg *dns.Msg) (int, error) { // nolint: golint
+func PNextOrFailure(name string, next Prober, ctx context.Context, c *dns.Client, msg *dns.Msg) (int, error) { // nolint: golint
 	if next != nil {
 		if span := ot.SpanFromContext(ctx); span != nil {
 			child := span.Tracer().StartSpan(next.Name(), ot.ChildOf(span.Context()))
@@ -79,21 +79,21 @@ func PNextOrFailure(name string, next Prober, ctx context.Context, c dns.Client,
 	return http.StatusInternalServerError, Error(name, errors.New("no next plugin found"))
 }
 
-// ClientWrite returns true if the response has been written to the client.
+// HTTPClientWrite returns true if the response has been written to the client.
 // Each plugin to adhere to this protocol.
-//func ClientWrite(rcode int) bool {
-//	switch rcode {
-//	case dns.RcodeServerFailure:
-//		fallthrough
-//	case dns.RcodeRefused:
-//		fallthrough
-//	case dns.RcodeFormatError:
-//		fallthrough
-//	case dns.RcodeNotImplemented:
-//		return false
-//	}
-//	return true
-//}
+func HTTPClientWrite(rcode int) bool {
+	switch rcode {
+	case http.StatusInternalServerError:
+		fallthrough
+	case http.StatusForbidden:
+		fallthrough
+	case http.StatusBadRequest:
+		fallthrough
+	case http.StatusNotImplemented:
+		return false
+	}
+	return true
+}
 
 // PErrOnce is returned when a plugin doesn't support multiple setups per server.
 var PErrOnce = errors.New("this plugin can only be used once per Server Block")

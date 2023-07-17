@@ -106,7 +106,6 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-*.png
 
 # Distribution / packaging
 .Python

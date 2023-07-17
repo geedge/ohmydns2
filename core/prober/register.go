@@ -30,7 +30,7 @@ func init() {
 }
 
 func newPBContext(i *caddy.Instance) caddy.Context {
-	return &probeContext{keysToConfigs: make(map[string]*dnsserver.Config)}
+	return &probeContext{keysToConfigs: make(map[string]*PBConfig)}
 }
 
 type probeContext struct {
@@ -56,7 +56,7 @@ func (p *probeContext) InspectServerBlocks(sourceFile string, serverBlocks []cad
 	for ib, s := range serverBlocks {
 		// Walk the s.Keys and expand any reverse address in their proper DNS in-addr zones. If the expansions leads for
 		// more than one reverse zone, replace the current value and add the rest to s.Keys.
-		zoneAddrs := []dnsserver.zoneAddr{}
+		Addrs := []addr{}
 		for ik, k := range s.Keys {
 			trans, k1 := parse.Transport(k) // get rid of any dns:// or other scheme.
 			hosts, port, err := plugin.SplitHostPort(k1)
@@ -88,8 +88,8 @@ func (p *probeContext) InspectServerBlocks(sourceFile string, serverBlocks []cad
 					s.Keys = append(s.Keys, h+":"+port)
 				}
 			}
-			for i := range hosts {
-				zoneAddrs = append(zoneAddrs, dnsserver.zoneAddr{Zone: dns.Fqdn(hosts[i]), Port: port, Transport: trans})
+			for _ = range hosts {
+				Addrs = append(Addrs, addr{Port: port, Transport: trans})
 			}
 		}
 
@@ -98,7 +98,7 @@ func (p *probeContext) InspectServerBlocks(sourceFile string, serverBlocks []cad
 		var firstConfigInBlock *PBConfig
 
 		for ik := range s.Keys {
-			za := zoneAddrs[ik]
+			za := Addrs[ik]
 			s.Keys[ik] = za.String()
 			// Save the config to our master list, and key it for lookups.
 			cfg := &PBConfig{
@@ -115,7 +115,7 @@ func (p *probeContext) InspectServerBlocks(sourceFile string, serverBlocks []cad
 			}
 			cfg.firstConfigInBlock = firstConfigInBlock
 
-			keyConfig := dnsserver.keyForConfig(ib, ik)
+			keyConfig := keyForConfig(ib, ik)
 			p.saveConfig(keyConfig, cfg)
 		}
 	}
@@ -161,23 +161,23 @@ func (p *probeContext) MakeServers() ([]caddy.Server, error) {
 		}
 	}
 
-	// For each server config, check for View Filter plugins
-	for _, c := range h.configs {
-		// Add filters in the plugin.cfg order for consistent filter func evaluation order.
-		for _, d := range dnsserver.Directives {
-			if vf, ok := c.registry[d].(dnsserver.Viewer); ok {
-				if c.ViewName != "" {
-					return nil, fmt.Errorf("multiple views defined in server block")
-				}
-				c.ViewName = vf.ViewName()
-				c.FilterFuncs = append(c.FilterFuncs, vf.Filter)
-			}
-		}
-	}
+	//// For each server config, check for View Filter plugins
+	//for _, c := range p.configs {
+	//	// Add filters in the plugin.cfg order for consistent filter func evaluation order.
+	//	for _, d := range Directives {
+	//		if vf, ok := c.registry[d].(Viewer); ok {
+	//			if c.ViewName != "" {
+	//				return nil, fmt.Errorf("multiple views defined in server block")
+	//			}
+	//			c.ViewName = vf.ViewName()
+	//			c.FilterFuncs = append(c.FilterFuncs, vf.Filter)
+	//		}
+	//	}
+	//}
 
 	// Verify that there is no overlap on the zones and listen addresses
 	// for unfiltered server configs
-	errValid := h.validateZonesAndListeningAddresses()
+	errValid := p.validateZonesAndListeningAddresses()
 	if errValid != nil {
 		return nil, errValid
 	}
@@ -220,25 +220,25 @@ func (pc PBConfig) Handler(name string) plugin.Prober {
 // inspect and interact with registered plugins but cannot be used to remove or add plugins.
 // Note that this is order dependent and the order is defined in directives.go, i.e. if your plugin
 // comes before the plugin you are checking; it will not be there (yet).
-func (pc PBConfig) Handlers() []plugin.Handler {
+func (pc PBConfig) Handlers() []plugin.Prober {
 	if pc.registry == nil {
 		return nil
 	}
-	hs := make([]plugin.Handler, 0, len(pc.registry))
+	hs := make([]plugin.Prober, 0, len(pc.registry))
 	for k := range pc.registry {
 		hs = append(hs, pc.registry[k])
 	}
 	return hs
 }
 
-func (p probeContext) validateZonesAndListeningAddresses() error {
+func (p *probeContext) validateZonesAndListeningAddresses() error {
 	//Validate addresses
-	checker := dnsserver.newOverlapZone()
+	checker := newOverlapZone()
 	for _, conf := range p.configs {
 		for _, h := range conf.ListenHosts {
 			// Validate the overlapping of ZoneAddr
-			akey := dnsserver.zoneAddr{Transport: conf.Transport, Zone: conf.Zone, Address: h, Port: conf.Port}
-			var existZone, overlapZone *dnsserver.zoneAddr
+			akey := addr{Transport: conf.Transport, Address: h, Port: conf.Port}
+			var existZone, overlapZone *addr
 			if len(conf.FilterFuncs) > 0 {
 				// This config has filters. Check for overlap with other (unfiltered) configs.
 				existZone, overlapZone = checker.check(akey)
