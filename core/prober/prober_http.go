@@ -56,20 +56,20 @@ func (l *loggerAdapter) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 
+// HTTPRequestKey is the context key for the current processed HTTP request (if current processed request was done over DOH)
+type HTTPRequestKey struct{}
+
 // NewProberHTTP returns a new ohmydns prober(可用HTTP调用参数) and compiles all plugins in to it.
-func NewProberHTTP(addr string, group []*PBConfig) (*ProberHTTP, error) {
-	s, err := NewServer(addr, group)
+func NewProberHTTP(addr string, conf *PBConfig) (*ProberHTTP, error) {
+	s, err := NewServer(addr, conf)
 	if err != nil {
 		return nil, err
 	}
 
 	// Use a custom request validation func or use the standard DoH path check.
 	var validator func(*http.Request) bool
-	for _, z := range s.zones {
-		for _, conf := range z {
-			validator = conf.HTTPRequestValidateFunc
-		}
-	}
+	validator = conf.HTTPRequestValidateFunc
+
 	if validator == nil {
 		validator = func(r *http.Request) bool { return r.URL.Path == proberPath }
 	}
@@ -126,7 +126,7 @@ func (p *ProberHTTP) OnStartupComplete() {
 		return
 	}
 
-	out := startUpZones(transport.PROBER+"://", p.Addr, p.zones)
+	out := startUpZones(transport.PROBER+"://", p.Addr)
 	if out != "" {
 		fmt.Print(out)
 	}
@@ -150,6 +150,7 @@ func (p *ProberHTTP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		p.countResponse(http.StatusNotFound)
 		return
 	}
+	// 设置响应头部
 	w.Header().Set("Content-Type", prober_contentType)
 
 	// 解析请求
@@ -173,7 +174,10 @@ func (p *ProberHTTP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if v, ok := param["act"]; ok {
 		switch v[0] {
 		case "new":
-			rs, err := p.proberlist.AddProber(param)
+			ctx := context.WithValue(context.Background(), Key{}, p.ProbeServer)
+			ctx = context.WithValue(ctx, LoopKey{}, 0)
+			ctx = context.WithValue(ctx, HTTPRequestKey{}, r)
+			err, rs := p.ServeProbe(ctx, w, r)
 			if err != nil {
 				//发生错误
 				w.WriteHeader(http.StatusInternalServerError)
@@ -203,6 +207,7 @@ func (p *ProberHTTP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		}
 	} else {
+		// 无act参数默认列举所有探测器当前状态
 		allProber, m, err := p.proberlist.ListAllProber()
 		if err != nil {
 			return

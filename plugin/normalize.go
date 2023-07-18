@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"fmt"
+	valid "github.com/asaskevich/govalidator"
 	"net"
 	"ohmydns2/plugin/pkg/cidr"
 	"ohmydns2/plugin/pkg/log"
@@ -164,4 +165,15 @@ func SplitHostPort(s string) (hosts []string, port string, err error) {
 	nets := cidr.Split(n)
 	hosts = cidr.Reverse(nets)
 	return hosts, port, nil
+}
+
+// SplitPort 用于从探测端的服务块中分离出Port，并且接收到的参数必须为[:port]，这意味着所有探测端服务块必须指定端口号
+func SplitPort(s string) (port string, err error) {
+	if !strings.HasPrefix(s, ":") {
+		return "", fmt.Errorf("探测端服务块配置存在错误，应接收到[:port]，实际接收到: %v", s)
+	}
+	if !valid.IsPort(s[1:]) {
+		return "", fmt.Errorf("探测端服务块配置存在错误，端口号不合法，实际接收到: %v", s[1:])
+	}
+	return s[1:], nil
 }

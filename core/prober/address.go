@@ -8,15 +8,15 @@ import (
 
 type addr struct {
 	Port      string
-	Transport string // tcp or tls
+	Transport string // HTTP
 	Address   string // used for bound addr - validation of overlapping
 }
 
 // String returns the string representation of addr.
-func (z addr) String() string {
-	s := "探测服务: " + z.Transport + "://" + ":" + z.Port
-	if z.Address != "" {
-		s += " on " + z.Address
+func (a addr) String() string {
+	s := "探测服务: " + a.Transport + "://" + ":" + a.Port
+	if a.Address != "" {
+		s += " on " + a.Address
 	}
 	return s
 }

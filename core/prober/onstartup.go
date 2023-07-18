@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"ohmydns2/plugin/pkg/dnsutil"
 	"regexp"
-	"sort"
 )
 
 // checkZoneSyntax() checks whether the given string match 1035 Preferred Syntax or not.
@@ -20,38 +19,36 @@ func checkZoneSyntax(zone string) bool {
 // startUpZones creates the text that we show when starting up:
 // grpc://example.com.:1055
 // example.com.:1053 on 127.0.0.1
-func startUpZones(protocol, addr string, zones map[string][]*PBConfig) string {
+func startUpZones(protocol, addr string) string {
 	s := ""
 
-	keys := make([]string, len(zones))
-	i := 0
+	//keys := make([]string, len(zones))
+	//i := 0
+	//
+	//for k := range zones {
+	//	keys[i] = k
+	//	i++
+	//}
+	//sort.Strings(keys)
+	//
+	//for _, zone := range keys {
+	//if strings.HasPrefix(protocol, "prober") {
+	//	s += fmt.Sprintln("探测服务启动，访问路径为" + "http://" + prober.proberurl + ":" + transport.PHTTPPort + prober.proberPath)
+	//	continue
+	//}
+	// split addr into protocol, IP and Port
+	_, ip, port, err := SplitProtocolHostPort(addr)
 
-	for k := range zones {
-		keys[i] = k
-		i++
+	if err != nil {
+		// this should not happen, but we need to take care of it anyway
+		s += fmt.Sprintln(protocol + ":" + addr)
 	}
-	sort.Strings(keys)
-
-	for _, zone := range keys {
-		//if strings.HasPrefix(protocol, "prober") {
-		//	s += fmt.Sprintln("探测服务启动，访问路径为" + "http://" + prober.proberurl + ":" + transport.PHTTPPort + prober.proberPath)
-		//	continue
-		//}
-		// split addr into protocol, IP and Port
-		_, ip, port, err := SplitProtocolHostPort(addr)
-
-		if err != nil {
-			// this should not happen, but we need to take care of it anyway
-			s += fmt.Sprintln(protocol + zone + ":" + addr)
-			continue
-		}
-		if ip == "" {
-			s += fmt.Sprintln(protocol + zone + ":" + port)
-			continue
-		}
-		// if the server is listening on a specific address let's make it visible in the log,
-		// so one can differentiate between all active listeners
-		s += fmt.Sprintln(protocol + zone + ":" + port + " on " + ip)
+	if ip == "" {
+		s += fmt.Sprintln(protocol + ":" + port)
 	}
+	// if the server is listening on a specific address let's make it visible in the log,
+	// so one can differentiate between all active listeners
+	s += fmt.Sprintln(protocol + ":" + port + " on " + ip)
+	//}
 	return s
 }

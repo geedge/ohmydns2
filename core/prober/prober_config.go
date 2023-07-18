@@ -31,8 +31,7 @@ type PBConfig struct {
 	// Stacktrace controls including stacktrace as part of log from recover mechanism, it is disabled by default.
 	Stacktrace bool
 
-	// The transport we implement, normally just "dns" over TCP/UDP, but could be
-	// DNS-over-TLS or DNS-over-gRPC.
+	// 使用的传输协议，目前为HTTP
 	Transport string
 
 	// If this function is not nil it will be used to inspect and validate

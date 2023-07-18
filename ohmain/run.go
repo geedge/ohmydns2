@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"ohmydns2/core/dnsserver"
-	"ohmydns2/core/prober"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -28,8 +27,8 @@ func init() {
 	caddy.RegisterCaddyfileLoader("flag", caddy.LoaderFunc(confLoader))
 	caddy.SetDefaultCaddyfileLoader("default", caddy.LoaderFunc(defaultLoader))
 
-	flag.StringVar(&prober.Port, serverType+".port", prober.DefaultPort, "Default port")
-	flag.StringVar(&prober.Port, "p", prober.DefaultPort, "Default port")
+	//flag.StringVar(&prober.Port, serverType+".port", prober.DefaultPort, "Default port")
+	//flag.StringVar(&prober.Port, "p", prober.DefaultPort, "Default port")
 
 	caddy.AppName = ohmyName
 	caddy.AppVersion = OMVersion

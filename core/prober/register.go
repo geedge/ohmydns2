@@ -1,16 +1,13 @@
 package prober
 
 import (
-	"fmt"
 	"github.com/coredns/caddy"
 	"github.com/coredns/caddy/caddyfile"
-	"github.com/miekg/dns"
 	"net"
 	"ohmydns2/core/dnsserver"
 	"ohmydns2/plugin"
 	"ohmydns2/plugin/pkg/parse"
 	"ohmydns2/plugin/pkg/transport"
-	"time"
 )
 
 const proberType = "dnsprober"
@@ -21,7 +18,7 @@ func init() {
 		DefaultInput: func() caddy.Input {
 			return caddy.CaddyfileInput{
 				Filepath:       "Ohmyfile",
-				Contents:       []byte(".:" + Port + " {\nprober_show\nlog\n}\n"),
+				Contents:       []byte("probe://:" + Port + " {\nprober_show\nlog\n}\n"),
 				ServerTypeName: proberType,
 			}
 		},
@@ -54,43 +51,21 @@ var _ caddy.Context = &probeContext{}
 func (p *probeContext) InspectServerBlocks(sourceFile string, serverBlocks []caddyfile.ServerBlock) ([]caddyfile.ServerBlock, error) {
 	// Normalize and check all the zone names and check for duplicates
 	for ib, s := range serverBlocks {
-		// Walk the s.Keys and expand any reverse address in their proper DNS in-addr zones. If the expansions leads for
-		// more than one reverse zone, replace the current value and add the rest to s.Keys.
 		Addrs := []addr{}
+		// 每一个服务块的zone部分
 		for ik, k := range s.Keys {
 			trans, k1 := parse.Transport(k) // get rid of any dns:// or other scheme.
-			hosts, port, err := plugin.SplitHostPort(k1)
-			// We need to make this a fully qualified domain name to catch all errors here and not later when
-			// plugin.Normalize is called again on these strings, with the prime difference being that the domain
-			// name is fully qualified. This was found by fuzzing where "ȶ" is deemed OK, but "ȶ." is not (might be a
-			// bug in miekg/dns actually). But here we were checking ȶ, which is OK, and later we barf in ȶ. leading to
-			// "index out of range".
-			for ih := range hosts {
-				_, _, err := plugin.SplitHostPort(dns.Fqdn(hosts[ih]))
-				if err != nil {
-					return nil, err
-				}
+			// 不属于探测端的服务块不解析
+			if trans != transport.PROBER {
+				continue
 			}
+			port, err := plugin.SplitPort(k1)
+
 			if err != nil {
 				return nil, err
 			}
-
-			if port == "" {
-				switch trans {
-				case transport.PROBER:
-					port = transport.PROBERPort
-				}
-			}
-
-			if len(hosts) > 1 {
-				s.Keys[ik] = hosts[0] + ":" + port // replace for the first
-				for _, h := range hosts[1:] {      // add the rest
-					s.Keys = append(s.Keys, h+":"+port)
-				}
-			}
-			for _ = range hosts {
-				Addrs = append(Addrs, addr{Port: port, Transport: trans})
-			}
+			s.Keys[ik] = port
+			Addrs = append(Addrs, addr{Port: port, Transport: transport.PROBERTRAN})
 		}
 
 		serverBlocks[ib].Keys = s.Keys // important to save back the new keys that are potentially created here.
@@ -98,13 +73,13 @@ func (p *probeContext) InspectServerBlocks(sourceFile string, serverBlocks []cad
 		var firstConfigInBlock *PBConfig
 
 		for ik := range s.Keys {
-			za := Addrs[ik]
-			s.Keys[ik] = za.String()
+			a := Addrs[ik]
+			s.Keys[ik] = a.String()
 			// Save the config to our master list, and key it for lookups.
 			cfg := &PBConfig{
 				ListenHosts: []string{""},
-				Port:        za.Port,
-				Transport:   za.Transport,
+				Port:        a.Port,
+				Transport:   a.Transport,
 			}
 
 			// Set reference to the first config in the current block.
@@ -143,18 +118,18 @@ func (p *probeContext) MakeServers() ([]caddy.Server, error) {
 	}
 
 	// we must map (group) each config to a bind address
-	groups, err := groupConfigsByListenAddr(p.configs)
+	groups, err := groupConfigsByListenPort(p.configs)
 	if err != nil {
 		return nil, err
 	}
 	// then we create a server for each group
 	var servers []caddy.Server
-	for addr, group := range groups {
+	for protaddr, group := range groups {
 		// switch on addr
-		switch tr, _ := parse.Transport(addr); tr {
+		switch tr, _ := parse.Transport(transport.PROBER + protaddr[len(transport.PROBERTRAN):]); tr {
 		case transport.PROBER:
-			s, err := NewProberHTTP(addr, group)
-			if err != nil {
+			s, e := NewProberHTTP(protaddr, group)
+			if e != nil {
 				return nil, err
 			}
 			servers = append(servers, s)
@@ -177,10 +152,10 @@ func (p *probeContext) MakeServers() ([]caddy.Server, error) {
 
 	// Verify that there is no overlap on the zones and listen addresses
 	// for unfiltered server configs
-	errValid := p.validateZonesAndListeningAddresses()
-	if errValid != nil {
-		return nil, errValid
-	}
+	//errValid := p.validateZonesAndListeningAddresses()
+	//if errValid != nil {
+	//	return nil, errValid
+	//}
 
 	return servers, nil
 }
@@ -190,9 +165,7 @@ func (pc PBConfig) AddPlugin(m plugin.Pplugin) {
 	pc.Plugin = append(pc.Plugin, m)
 }
 
-// registerHandler adds a handler to a site's handler registration. Handlers
-//
-//	use this to announce that they exist to other plugin.
+// registerHandler adds a prober to a site's prober registration.
 func (pc PBConfig) registerProber(p plugin.Prober) {
 	if pc.registry == nil {
 		pc.registry = make(map[string]plugin.Prober)
@@ -231,48 +204,44 @@ func (pc PBConfig) Handlers() []plugin.Prober {
 	return hs
 }
 
-func (p *probeContext) validateZonesAndListeningAddresses() error {
-	//Validate addresses
-	checker := newOverlapZone()
-	for _, conf := range p.configs {
-		for _, h := range conf.ListenHosts {
-			// Validate the overlapping of ZoneAddr
-			akey := addr{Transport: conf.Transport, Address: h, Port: conf.Port}
-			var existZone, overlapZone *addr
-			if len(conf.FilterFuncs) > 0 {
-				// This config has filters. Check for overlap with other (unfiltered) configs.
-				existZone, overlapZone = checker.check(akey)
-			} else {
-				// This config has no filters. Check for overlap with other (unfiltered) configs,
-				// and register the zone to prevent subsequent zones from overlapping with it.
-				existZone, overlapZone = checker.registerAndCheck(akey)
-			}
-			if existZone != nil {
-				return fmt.Errorf("cannot serve %s - it is already defined", akey.String())
-			}
-			if overlapZone != nil {
-				return fmt.Errorf("cannot serve %s - zone overlap listener capacity with %v", akey.String(), overlapZone.String())
-			}
-		}
-	}
-	return nil
-}
+//func (p *probeContext) validateZonesAndListeningAddresses() error {
+//	//Validate addresses
+//	checker := newOverlapZone()
+//	for _, conf := range p.configs {
+//		for _, h := range conf.ListenHosts {
+//			// Validate the overlapping of ZoneAddr
+//			akey := addr{Transport: conf.Transport, Address: h, Port: conf.Port}
+//			var existZone, overlapZone *addr
+//			if len(conf.FilterFuncs) > 0 {
+//				// This config has filters. Check for overlap with other (unfiltered) configs.
+//				existZone, overlapZone = checker.check(akey)
+//			} else {
+//				// This config has no filters. Check for overlap with other (unfiltered) configs,
+//				// and register the zone to prevent subsequent zones from overlapping with it.
+//				existZone, overlapZone = checker.registerAndCheck(akey)
+//			}
+//			if existZone != nil {
+//				return fmt.Errorf("cannot serve %s - it is already defined", akey.String())
+//			}
+//			if overlapZone != nil {
+//				return fmt.Errorf("cannot serve %s - zone overlap listener capacity with %v", akey.String(), overlapZone.String())
+//			}
+//		}
+//	}
+//	return nil
+//}
 
-// groupConfigsByListenAddr groups site configs by their listen
-// (bind) address, so sites that use the same listener can be served
-// on the same server instance. The return value maps the listen
-// address (what you pass into net.Listen) to the list of site configs.
-// This function does NOT vet the configs to ensure they are compatible.
-func groupConfigsByListenAddr(configs []*PBConfig) (map[string][]*PBConfig, error) {
-	groups := make(map[string][]*PBConfig)
+// groupConfigsByListenPort 建立监听端口和配置文件之间的映射，与服务端不同的是，一个监听地址端口只对应一个配置文件
+func groupConfigsByListenPort(configs []*PBConfig) (map[string]*PBConfig, error) {
+	groups := make(map[string]*PBConfig)
 	for _, conf := range configs {
 		for _, h := range conf.ListenHosts {
-			addr, err := net.ResolveTCPAddr("tcp", net.JoinHostPort(h, conf.Port))
+			tcpaddr, err := net.ResolveTCPAddr("tcp", net.JoinHostPort(h, conf.Port))
 			if err != nil {
 				return nil, err
 			}
-			addrstr := conf.Transport + "://" + addr.String()
-			groups[addrstr] = append(groups[addrstr], conf)
+			addrstr := conf.Transport + "://" + tcpaddr.String()
+			groups[addrstr] = conf
 		}
 	}
 
@@ -289,7 +258,7 @@ var (
 	Port = DefaultPort
 
 	// GracefulTimeout is the maximum duration of a graceful shutdown.
-	GracefulTimeout time.Duration
+	//GracefulTimeout time.Duration
 )
 
 var _ caddy.GracefulServer = new(dnsserver.Server)
