@@ -31,7 +31,7 @@ type ProberHTTP struct {
 	httpServer   *http.Server
 	listenAddr   net.Addr
 	validRequest func(*http.Request) bool
-	proberlist   *prober.ProberList
+	proberlist   *prober.ProberAndGoroutList
 	m            sync.Mutex
 }
 
@@ -81,7 +81,7 @@ func NewProberHTTP(addr string, conf *PBConfig) (*ProberHTTP, error) {
 		ErrorLog:     stdlog.New(&loggerAdapter{}, "", 0),
 	}
 
-	pl := &prober.ProberList{
+	pl := &prober.ProberAndGoroutList{
 		Pl: make(map[int]*prober.Prober),
 	}
 	sh := &ProberHTTP{

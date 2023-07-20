@@ -3,6 +3,7 @@ package prober
 import (
 	"context"
 	"github.com/miekg/dns"
+	"github.com/panjf2000/ants/v2"
 	"math"
 	"net"
 	olog "ohmydns2/plugin/pkg/log"
@@ -11,18 +12,19 @@ import (
 	"time"
 )
 
-// 探测器列表
-type ProberList struct {
-	Pl map[int]*Prober // 探测器
+// 探测器和协程状态列表
+type ProberAndGoroutList struct {
+	Pl     map[int]*Prober // 探测器
+	GRPool ants.Pool
 }
 
 // 获取当前正在运行的探测器数量
-func (pl ProberList) GetNum() int {
+func (pl *ProberAndGoroutList) GetNum() int {
 	return len(pl.Pl)
 }
 
 // 增加一个探测器,并返回对应的pid
-func (pl ProberList) AddProber(arg map[string][]string) (string, error) {
+func (pl *ProberAndGoroutList) AddProber(arg map[string][]string) (string, error) {
 	//当前时间戳，作为探测器ID
 	t := time.Now().Unix()
 	p := NewProber()
@@ -42,7 +44,7 @@ func (pl ProberList) AddProber(arg map[string][]string) (string, error) {
 }
 
 // 列举所有探测器信息
-func (pl ProberList) ListAllProber() (int, map[int]Prober, error) {
+func (pl *ProberAndGoroutList) ListAllProber() (int, map[int]Prober, error) {
 	rm := make(map[int]Prober)
 	for k, v := range pl.Pl {
 		rm[k] = *v
@@ -51,7 +53,7 @@ func (pl ProberList) ListAllProber() (int, map[int]Prober, error) {
 	return pl.GetNum(), rm, nil
 }
 
-func (pl ProberList) DeleteProberById(pid int) error {
+func (pl *ProberAndGoroutList) DeleteProberById(pid int) error {
 	err := pl.Pl[pid].Stop()
 	delete(pl.Pl, pid)
 	if err != nil {
@@ -61,7 +63,7 @@ func (pl ProberList) DeleteProberById(pid int) error {
 }
 
 // 删除所有的运行的探测器
-func (pl ProberList) DeleteProber() error {
+func (pl *ProberAndGoroutList) DeleteProber() error {
 	for k, _ := range pl.Pl {
 		err := pl.DeleteProberById(k)
 		if err != nil {
@@ -163,3 +165,6 @@ func (p *Prober) Probev64(ip net.IP) error {
 	}
 	return nil
 }
+
+var proberNum = 2000
+var goroutinPool, _ = ants.NewPool(proberNum)
