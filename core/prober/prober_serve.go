@@ -295,6 +295,7 @@ func (ps *ProbeServer) ServeProbe(ctx context.Context, w http.ResponseWriter, re
 	}
 	// 生成目标，开始探测
 	targets := getTarget(param[rangeParam])
+	//TODO:prober控制
 	for {
 		msg := new(dns.Msg)
 		t, ok := <-targets
