@@ -31,6 +31,7 @@ func (q Qname) ProbeDNS(ctx context.Context, c *dns.Client, msg *dns.Msg) (int, 
 		msg.Question[0].Name = generateQname(q.setFromFile, ctx)
 		return plugin.PNextOrFailure(q.Name(), q.next, ctx, c, msg)
 	}
+	log.Error("未指定参数")
 	return 2, errors.New(q.Name() + ": 未指定参数")
 
 }

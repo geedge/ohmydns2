@@ -4,6 +4,7 @@ import (
 	"github.com/coredns/caddy"
 	"ohmydns2/core/prober"
 	"ohmydns2/plugin"
+	olog "ohmydns2/plugin/pkg/log"
 )
 
 func init() { plugin.ProbeRegister("qname", setup) }
@@ -21,3 +22,5 @@ func setup(c *caddy.Controller) error {
 
 	return nil
 }
+
+var log = olog.NewWithPlugin("qname")

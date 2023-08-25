@@ -9,83 +9,20 @@ import (
 	"net"
 	"ohmydns2/core/prober"
 	olog "ohmydns2/plugin/pkg/log"
-	"strconv"
 	"sync"
-	"time"
 )
 
-// 探测器和协程状态列表
-type ProberAndGoroutList struct {
-	Pl     map[int]*Prober // 探测器
-	GRPool *ants.Pool
-}
-
-// 获取当前正在运行的探测器数量
-func (pl *ProberAndGoroutList) GetNum() int {
-	return len(pl.Pl)
-}
-
-// 增加一个探测器,并返回对应的pid
-func (pl *ProberAndGoroutList) AddProber(ctx context.Context, targetIP chan net.IP) (string, error) {
-	//当前时间戳，作为探测器ID
-	t := time.Now().Unix()
-	p := NewProber(ctx)
-	pctx, cancel := context.WithCancel(ctx)
-	p.stop = cancel
-	p.Pid = int(t)
-	pl.Pl[int(t)] = p
-	if p.Prange[0] != defaultPrange {
-		olog.Infof("新增探测器 %v:\t探测范围\t探针类型\n\t\t\t\t%v\t%v", p.Pid, defaultPrange, p.Ptype)
-	} else {
-		olog.Infof("新增探测器 %v:\t探测范围\t探针类型\n\t\t\t\t%v\t%v", p.Pid, "自定义", p.Ptype)
-	}
-	go p.Start(pctx, targetIP, pl.GRPool)
-	return strconv.Itoa(p.Pid), nil
-}
-
-// 列举所有探测器信息
-func (pl *ProberAndGoroutList) ListAllProber() (int, map[int]Prober, error) {
-	rm := make(map[int]Prober)
-	for k, v := range pl.Pl {
-		rm[k] = *v
-	}
-
-	return pl.GetNum(), rm, nil
-}
-
-// DeleteProberById 根据探测器ID停止探测任务
-func (pl *ProberAndGoroutList) DeleteProberById(pid int) error {
-	err := pl.Pl[pid].Stop()
-	delete(pl.Pl, pid)
-	if err != nil {
-		panic("can't Stop prober " + strconv.Itoa(pid))
-	}
-	return nil
-}
-
-// DeleteAllProber 删除所有的运行的探测器，底层调用了DeleteProberById
-func (pl *ProberAndGoroutList) DeleteAllProber() error {
-	for k, _ := range pl.Pl {
-		err := pl.DeleteProberById(k)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 type Prober struct {
-	Prange      []string `json:"prange"`      // 探测范围
-	Ptype       string   `json:"ptype"`       // 探针类型
-	AllAddrNum  int      `json:"allAddrnum"`  // 总共需要探测的地址数
-	ScanAddrNum int      `json:"scanAddrNum"` // 已探测过的地址数
-	Pid         int      `json:"pid"`         // 探测器ID
-	Loop        bool     `json:"loop"`        //是否持续探测
-	m           sync.Mutex
-	stop        context.CancelFunc // stop信号量
-	c           *dns.Client
-	//wg          sync.WaitGroup //协程运行池
-	//worker      int            //最大协程数
+	Prange           []string `json:"prange"`      // 探测范围
+	Ptype            string   `json:"ptype"`       // 探针类型
+	AllAddrNum       int      `json:"allAddrnum"`  // 总共需要探测的地址数
+	ScanAddrNum      int      `json:"scanAddrNum"` // 已探测过的地址数
+	Pid              int      `json:"pid"`         // 探测器ID
+	Loop             bool     `json:"loop"`        //是否持续探测
+	m                *sync.Mutex
+	stop             context.CancelFunc // stop信号量
+	removeFromPGList func()             //从探测器列表中删除对应记录
+	c                *dns.Client
 }
 
 // 新建探测器
@@ -124,7 +61,6 @@ func NewProber(ctx context.Context) *Prober {
 	return p
 }
 
-// TODO:增加参数检查功能，判断参数值是否合法
 //// SetArg 设定prober
 //func (p *Prober) SetArg(arg map[string][]string) {
 //	if v, ok := arg[prange]; ok {
@@ -173,7 +109,11 @@ func (p *Prober) Start(ctx context.Context, target chan net.IP, pool *ants.Pool)
 					// 中途取消
 					return
 				default:
-					pool.Submit(p.Probe(ctx, ip, &wg))
+					err := pool.Submit(p.Probe(ctx, ip, &wg))
+					if err != nil {
+						olog.Errorf("prober/Start:  %v", err.Error())
+						return
+					}
 					p.addScanAddrNum()
 				}
 			} else {
@@ -181,6 +121,10 @@ func (p *Prober) Start(ctx context.Context, target chan net.IP, pool *ants.Pool)
 				round -= 1
 				// 探测轮数归零，退出
 				if round == 0 {
+					err := p.exit()
+					if err != nil {
+						return
+					}
 					return
 				}
 				// 未归零，开始下一轮
@@ -195,7 +139,13 @@ func (p *Prober) Stop() error {
 	return nil
 }
 
+func (p *Prober) exit() error {
+	p.removeFromPGList()
+	return nil
+}
+
 func (p *Prober) addScanAddrNum() {
+	// 加锁防止数据错误
 	p.m.Lock()
 	p.ScanAddrNum += 1
 	p.m.Unlock()

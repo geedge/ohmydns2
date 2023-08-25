@@ -34,14 +34,14 @@ type ProberHTTP struct {
 	m            sync.Mutex
 }
 
-type ret struct {
+type proberstate struct {
 	Code      int                   `json:"code"`
 	Probernum int                   `json:"probernum"`
 	M         map[int]prober.Prober `json:"proberlist"`
 	Msg       string                `json:"msg"`
 }
 
-type newret struct {
+type codeAndMsg struct {
 	Code int    `json:"code"`
 	Msg  string `json:"msg"`
 }
@@ -133,7 +133,10 @@ func (p *ProberHTTP) Stop() error {
 	p.m.Lock()
 	defer p.m.Unlock()
 	if p.httpServer != nil {
-		p.httpServer.Shutdown(context.Background())
+		err := p.httpServer.Shutdown(context.Background())
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -147,7 +150,7 @@ func (p *ProberHTTP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// 设置响应头部
-	w.Header().Set("Content-Type", prober_contentType)
+	w.Header().Set("Content-Type", proberContenttype)
 
 	// 解析请求
 	param, _ := ohttp.ParseRequest(r)
@@ -161,35 +164,49 @@ func (p *ProberHTTP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		//发生错误
 		w.WriteHeader(http.StatusBadRequest)
 		p.countResponse(http.StatusBadRequest)
-		rec := &ret{Code: http.StatusBadRequest, Msg: res}
+		rec := &proberstate{Code: http.StatusBadRequest, Msg: res}
 		msg, _ := json.Marshal(rec)
-		w.Write(msg)
+		_, err := w.Write(msg)
+		if err != nil {
+			return
+		}
 		return
 	}
 	// 参数没有问题，开始处理
 	if v, ok := param["act"]; ok {
 		switch v[0] {
+
 		case "new":
 			ctx := context.WithValue(context.Background(), Key{}, p.ProbeServer)
 			ctx = context.WithValue(ctx, LoopKey{}, 0)
 			ctx = context.WithValue(ctx, HTTPRequestKey{}, r)
-			err, rs := p.ServeProbe(ctx, w, r)
-			if err != nil {
+			serverr, rs := p.ServeProbe(ctx, w, r)
+			// 服务发生错误
+			if serverr != nil {
 				//发生错误
 				w.WriteHeader(http.StatusInternalServerError)
 				p.countResponse(http.StatusInternalServerError)
-				r := &newret{Code: http.StatusInternalServerError, Msg: rs}
-				msg, _ := json.Marshal(r)
-				w.Write(msg)
+				res := &codeAndMsg{Code: http.StatusInternalServerError, Msg: rs}
+				msg, _ := json.Marshal(res)
+				_, err := w.Write(msg)
+				if err != nil {
+					olog.Errorf("prober_http/ServeHTTP:  %v", err.Error())
+					return
+				}
 				return
 			}
 			//一切正常
 			w.WriteHeader(http.StatusOK)
 			p.countResponse(http.StatusOK)
-			r := &newret{Code: http.StatusOK, Msg: rs}
-			msg, _ := json.Marshal(r)
-			w.Write(msg)
+			rec := &codeAndMsg{Code: http.StatusOK, Msg: rs}
+			msg, _ := json.Marshal(rec)
+			_, err := w.Write(msg)
+			if err != nil {
+				olog.Errorf("prober_http/ServeHTTP:  %v", err.Error())
+				return
+			}
 			return
+
 		case "stop":
 			if n, pok := param["pid"]; pok {
 				id, _ := strconv.Atoi(n[0])
@@ -197,27 +214,55 @@ func (p *ProberHTTP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				if err != nil {
 					return
 				}
+				// 成功删除
+				w.WriteHeader(http.StatusOK)
+				p.countResponse(http.StatusOK)
+				rec := &codeAndMsg{Code: http.StatusOK, Msg: "已停止探测器" + strconv.Itoa(id)}
+				msg, _ := json.Marshal(rec)
+				_, err = w.Write(msg)
+				if err != nil {
+					olog.Errorf("prober_http/ServeHTTP:  %v", err.Error())
+					return
+				}
 				return
 			}
-			//TODO:	无额外参数代表停止所有探测
 
-		}
-	} else {
-		// 无act参数默认列举所有探测器当前状态
-		allProber, m, err := p.proberlist.ListAllProber()
-		if err != nil {
+			// 无参数指定则停止所有探测任务
+			for pid, _ := range p.proberlist.Pl {
+				err := p.proberlist.DeleteProberById(pid)
+				if err != nil {
+					return
+				}
+			}
+			w.WriteHeader(http.StatusOK)
+			p.countResponse(http.StatusOK)
+			rec := &codeAndMsg{Code: http.StatusOK, Msg: "已停止所有探测器"}
+			msg, _ := json.Marshal(rec)
+			_, err := w.Write(msg)
+			if err != nil {
+				olog.Errorf("prober_http/ServeHTTP:  %v", err.Error())
+				return
+			}
 			return
+		default:
+			//跳转到列举探测器状态
+			break
 		}
-		rt := ret{
-			Code:      http.StatusOK,
-			Probernum: allProber,
-			M:         m,
-		}
-		w.WriteHeader(http.StatusOK)
-		p.countResponse(http.StatusOK)
-		msg, _ := json.Marshal(rt)
-		w.Write(msg)
 	}
+	// 无act参数默认列举所有探测器当前状态
+	allProber, m, err := p.proberlist.ListAllProber()
+	if err != nil {
+		return
+	}
+	rt := proberstate{
+		Code:      http.StatusOK,
+		Probernum: allProber,
+		M:         m,
+	}
+	w.WriteHeader(http.StatusOK)
+	p.countResponse(http.StatusOK)
+	msg, _ := json.Marshal(rt)
+	w.Write(msg)
 
 }
 
@@ -234,7 +279,7 @@ func (p *ProberHTTP) Shutdown() error {
 }
 
 const (
-	prober_contentType = "application/json"
-	proberPath         = "/prober"
-	proberurl          = "localhost"
+	proberContenttype = "application/json"
+	proberPath        = "/prober"
+	proberurl         = "localhost"
 )

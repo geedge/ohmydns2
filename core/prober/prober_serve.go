@@ -162,7 +162,11 @@ func (ps *ProbeServer) Serve(l net.Listener) error {
 		Handler: http.HandlerFunc(func(writer http.ResponseWriter, r *http.Request) {
 			ctx := context.WithValue(context.Background(), Key{}, ps)
 			ctx = context.WithValue(ctx, LoopKey{}, 0)
-			ps.ServeProbe(ctx, writer, r)
+			err, s := ps.ServeProbe(ctx, writer, r)
+			if err != nil {
+				olog.Errorf("prober_serve/Serve:  %v  \n  %v", err.Error(), s)
+				return
+			}
 		}),
 		DisableGeneralOptionsHandler: false,
 		ReadTimeout:                  ps.readTimeout,
@@ -289,10 +293,9 @@ func (ps *ProbeServer) ServeProbe(ctx context.Context, w http.ResponseWriter, re
 	// 将探测配置添加到上下文中
 	ctx = context.WithValue(ctx, prober.PAddrNum, targetNum)
 	ctx = context.WithValue(ctx, prober.Pchain, ps.conf)
-	proberid, err := ps.proberlist.AddProber(ctx, targets)
-	if err != nil {
-		return err, ""
-	}
+
+	// 创建并开始执行任务，返回探测器id
+	proberid := ps.proberlist.AddProber(ctx, targets)
 
 	// 都不匹配，尝试利用“.”指向的服务块
 	//if z, ok := ps.zones["."]; ok {
@@ -322,8 +325,6 @@ func (ps *ProbeServer) ServeProbe(ctx context.Context, w http.ResponseWriter, re
 	//	}
 	//}
 
-	//// Still here? Error out with REFUSED.
-	//errorAndMetricsFunc(ps.Addr, w, "请求存在错误", http.StatusForbidden)
 	return nil, "成功创建探测器：" + proberid
 }
 

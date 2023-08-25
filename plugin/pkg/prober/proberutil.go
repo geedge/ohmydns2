@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"ohmydns2/plugin/pkg/log"
 	"strconv"
 	"strings"
 
@@ -24,7 +25,11 @@ func uint32toIP4(ipInt uint32) string {
 // ip到数字
 func ip2Long(ip string) uint32 {
 	var long uint32
-	binary.Read(bytes.NewBuffer(net.ParseIP(ip).To4()), binary.BigEndian, &long)
+	err := binary.Read(bytes.NewBuffer(net.ParseIP(ip).To4()), binary.BigEndian, &long)
+	if err != nil {
+		log.Errorf("proberutil/ip2long:  %v", err.Error())
+		return 0
+	}
 	return long
 }
 
