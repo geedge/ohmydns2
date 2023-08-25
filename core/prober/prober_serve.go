@@ -6,8 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/coredns/caddy"
-	"github.com/miekg/dns"
 	ot "github.com/opentracing/opentracing-go"
+	"github.com/panjf2000/ants/v2"
 	"net"
 	"net/http"
 	"ohmydns2/plugin"
@@ -21,7 +21,6 @@ import (
 	"ohmydns2/plugin/prometheus/vars"
 	"runtime"
 	"runtime/debug"
-	"strconv"
 	"sync"
 	"time"
 )
@@ -48,6 +47,8 @@ type ProbeServer struct {
 	readTimeout  time.Duration  // Read timeout for TCP
 	writeTimeout time.Duration  // Write timeout for TCP
 
+	proberlist *prober.ProberAndGoroutList //探测器列表
+
 	tsigSecret map[string]string
 }
 
@@ -71,7 +72,12 @@ func NewServer(addr string, conf *PBConfig) (*ProbeServer, error) {
 		readTimeout:  3 * time.Second,
 		writeTimeout: 5 * time.Second,
 		tsigSecret:   make(map[string]string),
+		proberlist: &prober.ProberAndGoroutList{
+			Pl:     make(map[int]*prober.Prober),
+			GRPool: new(ants.Pool),
+		},
 	}
+	s.proberlist.GRPool, _ = ants.NewPool(goroutinePoolSize, ants.WithPreAlloc(true))
 	olog.Infof("服务启动，监听地址: %v", addr)
 
 	// We have to bound our wg with one increment
@@ -132,7 +138,7 @@ func NewServer(addr string, conf *PBConfig) (*ProbeServer, error) {
 		if _, ok := EnableChaos[stack.Name()]; ok {
 			s.classChaos = true
 		}
-		conf.pluginChain = stack
+		conf.PluginChain = stack
 	}
 
 	if !s.debug {
@@ -162,20 +168,6 @@ func (ps *ProbeServer) Serve(l net.Listener) error {
 		ReadTimeout:                  ps.readTimeout,
 		WriteTimeout:                 ps.writeTimeout,
 		IdleTimeout:                  ps.idleTimeout}
-	//&dns.Server{Listener: l,
-	//Net:           "tcp",
-	//TsigSecret:    ps.tsigSecret,
-	//MaxTCPQueries: tcpMaxQueries,
-	//ReadTimeout:   ps.readTimeout,
-	//WriteTimeout:  ps.writeTimeout,
-	//IdleTimeout: func() time.Duration {
-	//	return ps.idleTimeout
-	//},
-	//Handler: dns.HandlerFunc(func(w dns.ResponseWriter, r *dns.Msg) {
-	//	ctx := context.WithValue(context.Background(), Key{}, ps)
-	//	ctx = context.WithValue(ctx, LoopKey{}, 0)
-	//	s.ServeDNS(ctx, w, r)
-	//})}
 
 	ps.m.Unlock()
 
@@ -219,6 +211,8 @@ func (ps *ProbeServer) ListenPacket() (net.PacketConn, error) {
 // immediately.
 // This implements Caddy.Stopper interface.
 func (ps *ProbeServer) Stop() (err error) {
+	// 清空协程池
+	defer ps.proberlist.GRPool.Release()
 	if runtime.GOOS != "windows" {
 		// force connections to close after timeout
 		done := make(chan struct{})
@@ -276,16 +270,12 @@ func (ps *ProbeServer) ServeProbe(ctx context.Context, w http.ResponseWriter, re
 
 	// 获取请求参数
 	param, _ := ohttp.ParseRequest(req)
-	//var (
-	//	off       int
-	//	end       bool
-	//	dshandler *PBConfig
-	//)
-	// 用于探测的客户端
-	c := new(dns.Client)
+
+	//// 用于探测的客户端(启用，嵌入prober结构体中)
+	//c := new(dns.Client)
 
 	pcf := ps.conf
-	if pcf.pluginChain == nil { // can not get any plugins
+	if pcf.PluginChain == nil { // can not get any plugins
 		errorAndMetricsFunc(ps.Addr, w, "探测器缺少插件链", http.StatusNotImplemented)
 		return errors.New("探测器缺少插件链"), "探测器缺少插件链"
 	}
@@ -294,31 +284,14 @@ func (ps *ProbeServer) ServeProbe(ctx context.Context, w http.ResponseWriter, re
 		ctx = pcf.metaCollector.Collect(ctx, request.HTTPRequest{Req: req, W: w})
 	}
 	// 生成目标，开始探测
-	targets := getTarget(param[rangeParam])
-	//TODO:prober控制
-	for {
-		msg := new(dns.Msg)
-		t, ok := <-targets
-		if !ok {
-			break
-		}
-		// If all filter funcs pass, use this config.
-		if passAllFilterFuncs(ctx, pcf.FilterFuncs, &request.HTTPRequest{Req: req, W: w}) {
-			if pcf.ViewName != "" {
-				// if there was a view defined for this Config, set the view name in the context
-				ctx = context.WithValue(ctx, ViewKey{}, pcf.ViewName)
-			}
-			// 将所有的http请求参数传入上下文
-			ctx = context.WithValue(ctx, Paramkey, param)
-			// 将目标IP传入上下文
-			ctx = context.WithValue(ctx, Target, t)
-			rcode, _ := pcf.pluginChain.ProbeDNS(ctx, c, msg)
-			if !plugin.HTTPClientWrite(rcode) {
-				errorAndMetricsFunc(ps.Addr, w, pcf.pluginChain.Name()+" 错误", rcode)
-				return errors.New(pcf.pluginChain.Name() + " 错误"), strconv.Itoa(rcode)
-			}
+	targets, targetNum := getTarget(param[rangeParam])
 
-		}
+	// 将探测配置添加到上下文中
+	ctx = context.WithValue(ctx, prober.PAddrNum, targetNum)
+	ctx = context.WithValue(ctx, prober.Pchain, ps.conf)
+	proberid, err := ps.proberlist.AddProber(ctx, targets)
+	if err != nil {
+		return err, ""
 	}
 
 	// 都不匹配，尝试利用“.”指向的服务块
@@ -351,7 +324,7 @@ func (ps *ProbeServer) ServeProbe(ctx context.Context, w http.ResponseWriter, re
 
 	//// Still here? Error out with REFUSED.
 	//errorAndMetricsFunc(ps.Addr, w, "请求存在错误", http.StatusForbidden)
-	return nil, "成功"
+	return nil, "成功创建探测器：" + proberid
 }
 
 // passAllFilterFuncs returns true if all filter funcs evaluate to true for the given request
@@ -397,10 +370,11 @@ func errorAndMetricsFunc(server string, w http.ResponseWriter, rs string, rc int
 
 }
 
-func getTarget(s []string) chan net.IP {
+// 输入目标地址数据集，返回IP管道和目标地址数量，
+func getTarget(s []string) (chan net.IP, int) {
 	if s[0] == globalRange {
 		//	全球探测
-		return prober.GenGlobIPv4()
+		return prober.GenGlobIPv4(), 0
 	}
 	// 局部探测
 	ipchan := make(chan net.IP, 100)
@@ -410,7 +384,7 @@ func getTarget(s []string) chan net.IP {
 			ipchan <- net.ParseIP(v)
 		}
 	}()
-	return ipchan
+	return ipchan, len(s)
 }
 
 const (

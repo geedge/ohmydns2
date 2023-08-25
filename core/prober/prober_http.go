@@ -31,7 +31,6 @@ type ProberHTTP struct {
 	httpServer   *http.Server
 	listenAddr   net.Addr
 	validRequest func(*http.Request) bool
-	proberlist   *prober.ProberAndGoroutList
 	m            sync.Mutex
 }
 
@@ -66,7 +65,7 @@ func NewProberHTTP(addr string, conf *PBConfig) (*ProberHTTP, error) {
 		return nil, err
 	}
 
-	// Use a custom request validation func or use the standard DoH path check.
+	// 定义一个检查器来检查访问路径是否正确.
 	var validator func(*http.Request) bool
 	validator = conf.HTTPRequestValidateFunc
 
@@ -81,11 +80,8 @@ func NewProberHTTP(addr string, conf *PBConfig) (*ProberHTTP, error) {
 		ErrorLog:     stdlog.New(&loggerAdapter{}, "", 0),
 	}
 
-	pl := &prober.ProberAndGoroutList{
-		Pl: make(map[int]*prober.Prober),
-	}
 	sh := &ProberHTTP{
-		ProbeServer: s, httpServer: srv, validRequest: validator, proberlist: pl,
+		ProbeServer: s, httpServer: srv, validRequest: validator,
 	}
 	sh.httpServer.Handler = sh
 
@@ -161,11 +157,11 @@ func (p *ProberHTTP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// prange: 探测范围，默认全局，
 
 	// 检查参数
-	if r, rc := prober.VaildArgs(param); rc != 0 {
+	if res, rc := prober.VaildArgs(param); rc != 0 {
 		//发生错误
 		w.WriteHeader(http.StatusBadRequest)
 		p.countResponse(http.StatusBadRequest)
-		rec := &ret{Code: http.StatusBadRequest, Msg: r}
+		rec := &ret{Code: http.StatusBadRequest, Msg: res}
 		msg, _ := json.Marshal(rec)
 		w.Write(msg)
 		return

@@ -1,0 +1,26 @@
+package probe53
+
+import (
+	"context"
+	"github.com/miekg/dns"
+	"net"
+	"ohmydns2/core/prober"
+)
+
+type Probe53 struct {
+}
+
+func (p Probe53) ProbeDNS(ctx context.Context, client *dns.Client, msg *dns.Msg) (int, error) {
+	_, _, err := client.Exchange(msg, ctx.Value(target).(net.IP).String())
+	if err != nil {
+		logger.Debugf("探测%v发生错误，原因为: %v", ctx.Value(target).(net.IP).String(), err.Error())
+		return 1, err
+	}
+	return 0, nil
+}
+
+func (p Probe53) Name() string {
+	return "probe53"
+}
+
+var target = prober.Target

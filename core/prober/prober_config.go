@@ -62,7 +62,7 @@ type PBConfig struct {
 	Plugin []plugin.Pplugin
 
 	// Compiled plugin stack.
-	pluginChain plugin.Prober
+	PluginChain plugin.Prober
 
 	// Plugin interested in announcing that they exist, so other plugin can call methods
 	// on them should register themselves here. The name should be the name as return by the

@@ -1,7 +1,8 @@
 package prober
 
 const (
-	globalRange = "globe"
+	globalRange       = "globe"
+	goroutinePoolSize = 3000
 )
 
 const (

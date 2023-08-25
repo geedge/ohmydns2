@@ -16,7 +16,7 @@ func setup(c *caddy.Controller) error {
 	}
 
 	prober.GetPBConfig(c).AddPlugin(func(next plugin.Prober) plugin.Prober {
-		return Qname{}
+		return qname
 	})
 
 	return nil

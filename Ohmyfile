@@ -11,5 +11,6 @@
 
 
 prober:2115 {
-
+    qname
+    probe53
 }
