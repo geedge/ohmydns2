@@ -30,11 +30,11 @@ func (a Atk) ServeDNS(_ context.Context, w dns.ResponseWriter, r *dns.Msg) (int,
 		//	放大
 		msg = a.Response(msg, 0)
 
-	case 2:
+	case 1:
 		//观察
 		log.Infof("接收到请求: %v ask %v", state.IP(), state.Name())
 		msg = a.Response(msg, 1)
-	case 1:
+	case 2:
 		//其他请求不响应
 		return 0, nil
 	}
@@ -63,6 +63,7 @@ func (a Atk) Response(msg *dns.Msg, iptype int) *dns.Msg {
 			msg.Ns = append(msg.Ns, rec)
 		}
 	} else {
+
 		//返回NXNS
 		msg.Rcode = dns.RcodeNameError
 		//授权记录
