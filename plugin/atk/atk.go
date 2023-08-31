@@ -28,11 +28,12 @@ func (a Atk) ServeDNS(_ context.Context, w dns.ResponseWriter, r *dns.Msg) (int,
 	switch a.validRequest(state.QName()) {
 	case 0:
 		//	放大
+		log.Infof("%v 查询 %v, 准备放大", state.IP(), state.Name())
 		msg = a.Response(msg, 0)
 
 	case 1:
 		//观察
-		log.Infof("接收到请求: %v ask %v", state.IP(), state.Name())
+		log.Infof("%v 接收到请求: %v ask %v", a.ip6NS, state.IP(), state.Name())
 		msg = a.Response(msg, 1)
 	case 2:
 		//其他请求不响应
