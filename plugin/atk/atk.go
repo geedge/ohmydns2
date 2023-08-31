@@ -37,6 +37,9 @@ func (a Atk) ServeDNS(_ context.Context, w dns.ResponseWriter, r *dns.Msg) (int,
 		//观察
 		log.Infof("%v 接收到请求: %v ask %v", a.ip6NS, state.IP(), state.Name())
 		msg = a.Response(msg, 1)
+	case -1:
+		log.Infof("%v 接收到被修改的请求(QnameMini): %v ask %v", a.ip6NS, state.IP(), state.Name())
+		msg = a.Response(msg, -1)
 	case 2:
 		//其他请求不响应
 		log.Infof("%v 意外查询 %v", state.IP(), state.Name())
@@ -66,10 +69,21 @@ func (a Atk) Response(msg *dns.Msg, iptype int) *dns.Msg {
 			rec.Ns = ns
 			msg.Ns = append(msg.Ns, rec)
 		}
-	} else {
-
+	} else if iptype == 1 {
 		//返回NXNS
 		msg.Rcode = dns.RcodeNameError
+		//授权记录
+		rec := new(dns.NS)
+		rec.Hdr = dns.RR_Header{Name: a.zoneip6, Class: dns.ClassINET, Ttl: 10, Rrtype: dns.TypeNS}
+		rec.Ns = a.ip6NS
+		msg.Ns = append(msg.Ns, rec)
+		//胶水记录
+		recaddr := new(dns.AAAA)
+		recaddr.Hdr = dns.RR_Header{Name: a.ip6NS, Class: dns.ClassINET, Ttl: 10, Rrtype: dns.TypeAAAA}
+		recaddr.AAAA = net.ParseIP(a.ip6Addr)
+		msg.Extra = append(msg.Extra, recaddr)
+	} else {
+		//	特殊请求，返回权威信息
 		//授权记录
 		rec := new(dns.NS)
 		rec.Hdr = dns.RR_Header{Name: a.zoneip6, Class: dns.ClassINET, Ttl: 10, Rrtype: dns.TypeNS}
