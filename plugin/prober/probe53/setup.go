@@ -5,6 +5,7 @@ import (
 	"ohmydns2/core/prober"
 	"ohmydns2/plugin"
 	"ohmydns2/plugin/pkg/log"
+	//"ohmydns2/plugin/pkg/prober"
 )
 
 func init() {

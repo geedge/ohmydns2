@@ -6,8 +6,8 @@ import (
 	"github.com/miekg/dns"
 	"github.com/pochard/commons/randstr"
 	"net"
-	"ohmydns2/core/prober"
 	"ohmydns2/plugin"
+	"ohmydns2/plugin/pkg/prober"
 	"strconv"
 	"strings"
 )

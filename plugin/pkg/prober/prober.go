@@ -7,7 +7,6 @@ import (
 	"github.com/panjf2000/ants/v2"
 	"math"
 	"net"
-	"ohmydns2/core/prober"
 	olog "ohmydns2/plugin/pkg/log"
 	"sync"
 )
@@ -60,35 +59,6 @@ func NewProber(ctx context.Context) *Prober {
 	}
 	return p
 }
-
-//// SetArg 设定prober
-//func (p *Prober) SetArg(arg map[string][]string) {
-//	if v, ok := arg[prange]; ok {
-//		p.Prange = v
-//		p.AllAddr = len(v)
-//	} else {
-//		// 默认全网探测
-//		p.Prange = []string{defaultPrange}
-//		p.AllAddr = math.MaxInt32
-//	}
-//	if v, ok := arg[ptype]; ok {
-//		p.Ptype = v[0]
-//	} else {
-//		// 默认v64 CNAME关联
-//		p.Ptype = defaultPtype
-//	}
-//	// 是否持续探测，默认只探测一次
-//	if v, ok := arg[ploop]; ok && v[0] == "1" {
-//		p.Loop = true
-//	} else {
-//		p.Loop = defaultPloop
-//	}
-//	p.stop = make(chan bool)
-//	p.ScannedAddr = 0
-//	p.c = new(dns.Client)
-//	p.c.DialTimeout = defaultMaxDial * time.Second
-//	p.c.ReadTimeout = p.c.DialTimeout
-//}
 
 // Start 探测代码
 func (p *Prober) Start(ctx context.Context, target chan net.IP, pool *ants.Pool) {
@@ -154,22 +124,27 @@ func (p *Prober) addScanAddrNum() {
 // Probe 所有探测方法的封装方法
 func (p *Prober) Probe(ctx context.Context, ip net.IP, wg *sync.WaitGroup) func() {
 	msg := new(dns.Msg)
-	pcf := ctx.Value(Pchain).(*prober.PBConfig)
+	pcf := ctx.Value(Pchain).(*PBConfig)
 	return func() {
 		// 将目标IP传入上下文
-		ctx = context.WithValue(ctx, prober.Target, ip)
+		ctx = context.WithValue(ctx, Target, ip)
 		_, _ = pcf.PluginChain.ProbeDNS(ctx, p.c, msg)
 		wg.Done()
 	}
 }
 
-func (p *Prober) Probev64(ip net.IP) error {
-	msg := new(dns.Msg)
-	msg.SetQuestion(dns.Fqdn(p.makeProbe(ip)), dns.TypeTXT)
-	// TODO:展示响应内容
-	_, _, err := p.c.Exchange(msg, ip.String()+":53")
-	if err != nil {
-		return err
-	}
-	return nil
-}
+//func (p *Prober) Probev64(ip net.IP) error {
+//	msg := new(dns.Msg)
+//	msg.SetQuestion(dns.Fqdn(p.makeProbe(ip)), dns.TypeTXT)
+//	// TODO:展示响应内容
+//	_, _, err := p.c.Exchange(msg, ip.String()+":53")
+//	if err != nil {
+//		return err
+//	}
+//	return nil
+//}
+
+const (
+	Paramkey = "httpparam"
+	Target   = "targetip"
+)

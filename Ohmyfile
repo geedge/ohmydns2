@@ -1,16 +1,20 @@
+#.:53 {
+#    v64dns n64.top {
+#        v4ns ns4-1 8.217.120.200
+#        v6ns ns6-1 240b:4001:21b:d301:951b:8de:3cd7:c0e5
+#        chain v4-1 v6-1
+#        ip-embed
+#        chain-mlen 4
+#        analyze neo4j http://localhost:7447 neo4j hdk19990815
+#    }
+#}
+
+
+#prober:2115 {
+#    qname
+#    probe53
+#}
+
 .:53 {
-    v64dns n64.top {
-        v4ns ns4-1 8.217.120.200
-        v6ns ns6-1 240b:4001:21b:d301:951b:8de:3cd7:c0e5
-        chain v4-1 v6-1
-        ip-embed
-        chain-mlen 4
-        analyze neo4j http://localhost:7447 neo4j hdk19990815
-    }
-}
-
-
-prober:2115 {
-    qname
-    probe53
+    atk comm.a.net ns.a.net 1.2.3.4 v6.b.net ns.b.net fe80::6cc1:aafd:5039:7b2b 10
 }

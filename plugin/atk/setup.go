@@ -8,7 +8,7 @@ import (
 	"strconv"
 )
 
-func init() { plugin.Register("Atk", setup) }
+func init() { plugin.Register("atk", setup) }
 
 func setup(c *caddy.Controller) error {
 	atk := new(Atk)

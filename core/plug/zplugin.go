@@ -4,11 +4,14 @@ package plugin
 
 import (
 	// Include all plugins.
+	_ "ohmydns2/plugin/atk"
 	_ "ohmydns2/plugin/debug"
 	_ "ohmydns2/plugin/dnstap"
 	_ "ohmydns2/plugin/forward"
 	_ "ohmydns2/plugin/log"
 	_ "ohmydns2/plugin/metadata"
+	_ "ohmydns2/plugin/prober/probe53"
+	_ "ohmydns2/plugin/prober/qname"
 	_ "ohmydns2/plugin/prometheus"
 	_ "ohmydns2/plugin/v64dns"
 	_ "ohmydns2/plugin/whoami"

@@ -4,7 +4,7 @@ import (
 	"context"
 	"github.com/miekg/dns"
 	"net"
-	"ohmydns2/core/prober"
+	"ohmydns2/plugin/pkg/prober"
 )
 
 type Probe53 struct {

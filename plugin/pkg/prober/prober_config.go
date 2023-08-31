@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"github.com/coredns/caddy"
 	"net/http"
 	"ohmydns2/plugin"
 	"ohmydns2/plugin/pkg/request"
@@ -69,33 +68,62 @@ type PBConfig struct {
 	// Handler's Name method.
 	registry map[string]plugin.Prober
 
-	// firstConfigInBlock is used to reference the first config in a server block, for the
+	// FirstConfigInBlock is used to reference the first config in a server block, for the
 	// purpose of sharing single instance of each plugin among all zones in a server block.
-	firstConfigInBlock *PBConfig
+	FirstConfigInBlock *PBConfig
 
-	// metaCollector references the first MetadataCollector plugin, if one exists
-	metaCollector ProberMetadataCollector
+	// MetaCollector references the first MetadataCollector plugin, if one exists
+	MetaCollector ProberMetadataCollector
 }
 
 // FilterFunc is a function that filters requests from the Config
 type FilterFunc func(context.Context, *request.HTTPRequest) bool
 
-// keyForConfig builds a key for identifying the configs during setup time
-func keyForConfig(blocIndex int, blocKeyIndex int) string {
+// KeyForConfig builds a key for identifying the configs during setup time
+func KeyForConfig(blocIndex int, blocKeyIndex int) string {
 	return fmt.Sprintf("%d:%d", blocIndex, blocKeyIndex)
 }
 
-// GetConfig gets the Config that corresponds to c.
-// If none exist nil is returned.
-func GetPBConfig(c *caddy.Controller) *PBConfig {
-	ctx := c.Context().(*probeContext)
-	key := keyForConfig(c.ServerBlockIndex, c.ServerBlockKeyIndex)
-	if cfg, ok := ctx.keysToConfigs[key]; ok {
-		return cfg
+// AddPlugin adds a plugin to a site's plugin stack.
+func (pc PBConfig) AddPlugin(m plugin.Pplugin) {
+	pc.Plugin = append(pc.Plugin, m)
+}
+
+// registerHandler adds a prober to a site's prober registration.
+func (pc PBConfig) RegisterProber(p plugin.Prober) {
+	if pc.registry == nil {
+		pc.registry = make(map[string]plugin.Prober)
 	}
-	// we should only get here during tests because directive
-	// actions typically skip the server blocks where we make
-	// the configs.
-	ctx.saveConfig(key, &PBConfig{ListenHosts: []string{""}})
-	return GetPBConfig(c)
+
+	// Just overwrite...
+	pc.registry[p.Name()] = p
+}
+
+// Handler returns the plugin handler that has been added to the config under its name.
+// This is useful to inspect if a certain plugin is active in this server.
+// Note that this is order dependent and the order is defined in directives.go, i.e. if your plugin
+// comes before the plugin you are checking; it will not be there (yet).
+func (pc PBConfig) Handler(name string) plugin.Prober {
+	if pc.registry == nil {
+		return nil
+	}
+	if h, ok := pc.registry[name]; ok {
+		return h
+	}
+	return nil
+}
+
+// Handlers returns a slice of plugins that have been registered. This can be used to
+// inspect and interact with registered plugins but cannot be used to remove or add plugins.
+// Note that this is order dependent and the order is defined in directives.go, i.e. if your plugin
+// comes before the plugin you are checking; it will not be there (yet).
+func (pc PBConfig) Handlers() []plugin.Prober {
+	if pc.registry == nil {
+		return nil
+	}
+	hs := make([]plugin.Prober, 0, len(pc.registry))
+	for k := range pc.registry {
+		hs = append(hs, pc.registry[k])
+	}
+	return hs
 }

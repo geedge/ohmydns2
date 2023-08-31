@@ -36,16 +36,16 @@ type ProbeServer struct {
 	server *http.Server // http服务
 	m      sync.Mutex   // protects the servers
 
-	conf         *PBConfig      // zones keyed by their port
-	httpWg       sync.WaitGroup // used to wait on outstanding connections
-	graceTimeout time.Duration  // the maximum duration of a graceful shutdown
-	trace        trace.Trace    // the trace plugin for the server
-	debug        bool           // disable recover()
-	stacktrace   bool           // enable stacktrace in recover error log
-	classChaos   bool           // allow non-INET class queries
-	idleTimeout  time.Duration  // Idle timeout for TCP
-	readTimeout  time.Duration  // Read timeout for TCP
-	writeTimeout time.Duration  // Write timeout for TCP
+	conf         *prober.PBConfig // zones keyed by their port
+	httpWg       sync.WaitGroup   // used to wait on outstanding connections
+	graceTimeout time.Duration    // the maximum duration of a graceful shutdown
+	trace        trace.Trace      // the trace plugin for the server
+	debug        bool             // disable recover()
+	stacktrace   bool             // enable stacktrace in recover error log
+	classChaos   bool             // allow non-INET class queries
+	idleTimeout  time.Duration    // Idle timeout for TCP
+	readTimeout  time.Duration    // Read timeout for TCP
+	writeTimeout time.Duration    // Write timeout for TCP
 
 	proberlist *prober.ProberAndGoroutList //探测器列表
 
@@ -58,13 +58,8 @@ type response struct {
 	Msg  string `json:"msg"`
 }
 
-// MetadataCollector is a plugin that can retrieve metadata functions from all metadata providing plugins
-type ProberMetadataCollector interface {
-	Collect(context.Context, request.HTTPRequest) context.Context
-}
-
 // NewServer returns a new OhmyDNS2 probe server and compiles all plugins in to it.
-func NewServer(addr string, conf *PBConfig) (*ProbeServer, error) {
+func NewServer(addr string, conf *prober.PBConfig) (*ProbeServer, error) {
 	s := &ProbeServer{
 		Addr:         addr,
 		graceTimeout: 5 * time.Second,
@@ -119,12 +114,12 @@ func NewServer(addr string, conf *PBConfig) (*ProbeServer, error) {
 		stack = conf.Plugin[i](stack)
 
 		// register the *handler* also
-		conf.registerProber(stack)
+		conf.RegisterProber(stack)
 
 		// If the current plugin is a MetadataCollector, bookmark it for later use. This loop traverses the plugin
 		// list backwards, so the first MetadataCollector plugin wins.
-		if mdc, ok := stack.(ProberMetadataCollector); ok {
-			conf.metaCollector = mdc
+		if mdc, ok := stack.(prober.ProberMetadataCollector); ok {
+			conf.MetaCollector = mdc
 		}
 
 		if s.trace == nil && stack.Name() == "trace" {
@@ -180,7 +175,7 @@ func (ps *ProbeServer) Serve(l net.Listener) error {
 
 // ServePacket starts the server with an existing packetconn. It blocks until the server stops.
 // This implements caddy.UDPServer interface.
-func (ps *ProbeServer) ServePacket(p net.PacketConn) error {
+func (ps *ProbeServer) ServePacket(net.PacketConn) error {
 	return nil
 }
 
@@ -283,9 +278,9 @@ func (ps *ProbeServer) ServeProbe(ctx context.Context, w http.ResponseWriter, re
 		errorAndMetricsFunc(ps.Addr, w, "探测器缺少插件链", http.StatusNotImplemented)
 		return errors.New("探测器缺少插件链"), "探测器缺少插件链"
 	}
-	if pcf.metaCollector != nil {
+	if pcf.MetaCollector != nil {
 		// Collect metadata now, so it can be used before we send a request down the plugin chain.
-		ctx = pcf.metaCollector.Collect(ctx, request.HTTPRequest{Req: req, W: w})
+		ctx = pcf.MetaCollector.Collect(ctx, request.HTTPRequest{Req: req, W: w})
 	}
 	// 生成目标，开始探测
 	targets, targetNum := getTarget(param[rangeParam])
@@ -329,7 +324,7 @@ func (ps *ProbeServer) ServeProbe(ctx context.Context, w http.ResponseWriter, re
 }
 
 // passAllFilterFuncs returns true if all filter funcs evaluate to true for the given request
-func passAllFilterFuncs(ctx context.Context, filterFuncs []FilterFunc, req *request.HTTPRequest) bool {
+func passAllFilterFuncs(ctx context.Context, filterFuncs []prober.FilterFunc, req *request.HTTPRequest) bool {
 	for _, ff := range filterFuncs {
 		if !ff(ctx, req) {
 			return false
@@ -387,11 +382,6 @@ func getTarget(s []string) (chan net.IP, int) {
 	}()
 	return ipchan, len(s)
 }
-
-const (
-	Paramkey = "httpparam"
-	Target   = "targetip"
-)
 
 type (
 	// Key is the context key for the current server added to the context.

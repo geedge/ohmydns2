@@ -7,6 +7,7 @@ import (
 	"ohmydns2/core/dnsserver"
 	"ohmydns2/plugin"
 	"ohmydns2/plugin/pkg/parse"
+	"ohmydns2/plugin/pkg/prober"
 	"ohmydns2/plugin/pkg/transport"
 )
 
@@ -26,29 +27,29 @@ func init() {
 	})
 }
 
-func newPBContext(i *caddy.Instance) caddy.Context {
-	return &probeContext{keysToConfigs: make(map[string]*PBConfig)}
+func newPBContext(*caddy.Instance) caddy.Context {
+	return &ProbeContext{keysToConfigs: make(map[string]*prober.PBConfig)}
 }
 
-type probeContext struct {
-	keysToConfigs map[string]*PBConfig
+type ProbeContext struct {
+	keysToConfigs map[string]*prober.PBConfig
 
 	// configs is the master list of all site configs.
-	configs []*PBConfig
+	configs []*prober.PBConfig
 }
 
-func (p *probeContext) saveConfig(key string, cfg *PBConfig) {
+func (p *ProbeContext) saveConfig(key string, cfg *prober.PBConfig) {
 	p.configs = append(p.configs, cfg)
 	p.keysToConfigs[key] = cfg
 }
 
 // Compile-time check to ensure dnsContext implements the caddy.Context interface
-var _ caddy.Context = &probeContext{}
+var _ caddy.Context = &ProbeContext{}
 
 // InspectServerBlocks make sure that everything checks out before
 // executing directives and otherwise prepares the directives to
 // be parsed and executed.
-func (p *probeContext) InspectServerBlocks(sourceFile string, serverBlocks []caddyfile.ServerBlock) ([]caddyfile.ServerBlock, error) {
+func (p *ProbeContext) InspectServerBlocks(_ string, serverBlocks []caddyfile.ServerBlock) ([]caddyfile.ServerBlock, error) {
 	// Normalize and check all the zone names and check for duplicates
 	for ib, s := range serverBlocks {
 		Addrs := []addr{}
@@ -70,13 +71,13 @@ func (p *probeContext) InspectServerBlocks(sourceFile string, serverBlocks []cad
 
 		serverBlocks[ib].Keys = s.Keys // important to save back the new keys that are potentially created here.
 
-		var firstConfigInBlock *PBConfig
+		var firstConfigInBlock *prober.PBConfig
 
 		for ik := range s.Keys {
 			a := Addrs[ik]
 			s.Keys[ik] = a.String()
 			// Save the config to our master list, and key it for lookups.
-			cfg := &PBConfig{
+			cfg := &prober.PBConfig{
 				ListenHosts: []string{""},
 				Port:        a.Port,
 				Transport:   a.Transport,
@@ -88,9 +89,9 @@ func (p *probeContext) InspectServerBlocks(sourceFile string, serverBlocks []cad
 			if ik == 0 {
 				firstConfigInBlock = cfg
 			}
-			cfg.firstConfigInBlock = firstConfigInBlock
+			cfg.FirstConfigInBlock = firstConfigInBlock
 
-			keyConfig := keyForConfig(ib, ik)
+			keyConfig := prober.KeyForConfig(ib, ik)
 			p.saveConfig(keyConfig, cfg)
 		}
 	}
@@ -98,23 +99,23 @@ func (p *probeContext) InspectServerBlocks(sourceFile string, serverBlocks []cad
 }
 
 // MakeServers uses the newly-created siteConfigs to create and return a list of server instances.
-func (p *probeContext) MakeServers() ([]caddy.Server, error) {
+func (p *ProbeContext) MakeServers() ([]caddy.Server, error) {
 	// Copy the Plugin, ListenHosts and Debug from first config in the block
 	// to all other config in the same block . Doing this results in zones
 	// sharing the same plugin instances and settings as other zones in
 	// the same block.
 	for _, c := range p.configs {
-		c.Plugin = c.firstConfigInBlock.Plugin
-		c.ListenHosts = c.firstConfigInBlock.ListenHosts
-		c.Debug = c.firstConfigInBlock.Debug
-		c.Stacktrace = c.firstConfigInBlock.Stacktrace
+		c.Plugin = c.FirstConfigInBlock.Plugin
+		c.ListenHosts = c.FirstConfigInBlock.ListenHosts
+		c.Debug = c.FirstConfigInBlock.Debug
+		c.Stacktrace = c.FirstConfigInBlock.Stacktrace
 
 		// Fork TLSConfig for each encrypted connection
-		c.TLSConfig = c.firstConfigInBlock.TLSConfig.Clone()
-		c.ReadTimeout = c.firstConfigInBlock.ReadTimeout
-		c.WriteTimeout = c.firstConfigInBlock.WriteTimeout
-		c.IdleTimeout = c.firstConfigInBlock.IdleTimeout
-		c.TsigSecret = c.firstConfigInBlock.TsigSecret
+		c.TLSConfig = c.FirstConfigInBlock.TLSConfig.Clone()
+		c.ReadTimeout = c.FirstConfigInBlock.ReadTimeout
+		c.WriteTimeout = c.FirstConfigInBlock.WriteTimeout
+		c.IdleTimeout = c.FirstConfigInBlock.IdleTimeout
+		c.TsigSecret = c.FirstConfigInBlock.TsigSecret
 	}
 
 	// we must map (group) each config to a bind address
@@ -160,80 +161,24 @@ func (p *probeContext) MakeServers() ([]caddy.Server, error) {
 	return servers, nil
 }
 
-// AddPlugin adds a plugin to a site's plugin stack.
-func (pc PBConfig) AddPlugin(m plugin.Pplugin) {
-	pc.Plugin = append(pc.Plugin, m)
+// GetConfig gets the Config that corresponds to c.
+// If none exist nil is returned.
+func GetPBConfig(c *caddy.Controller) *prober.PBConfig {
+	ctx := c.Context().(*ProbeContext)
+	key := prober.KeyForConfig(c.ServerBlockIndex, c.ServerBlockKeyIndex)
+	if cfg, ok := ctx.keysToConfigs[key]; ok {
+		return cfg
+	}
+	// we should only get here during tests because directive
+	// actions typically skip the server blocks where we make
+	// the configs.
+	ctx.saveConfig(key, &prober.PBConfig{ListenHosts: []string{""}})
+	return GetPBConfig(c)
 }
-
-// registerHandler adds a prober to a site's prober registration.
-func (pc PBConfig) registerProber(p plugin.Prober) {
-	if pc.registry == nil {
-		pc.registry = make(map[string]plugin.Prober)
-	}
-
-	// Just overwrite...
-	pc.registry[p.Name()] = p
-}
-
-// Handler returns the plugin handler that has been added to the config under its name.
-// This is useful to inspect if a certain plugin is active in this server.
-// Note that this is order dependent and the order is defined in directives.go, i.e. if your plugin
-// comes before the plugin you are checking; it will not be there (yet).
-func (pc PBConfig) Handler(name string) plugin.Prober {
-	if pc.registry == nil {
-		return nil
-	}
-	if h, ok := pc.registry[name]; ok {
-		return h
-	}
-	return nil
-}
-
-// Handlers returns a slice of plugins that have been registered. This can be used to
-// inspect and interact with registered plugins but cannot be used to remove or add plugins.
-// Note that this is order dependent and the order is defined in directives.go, i.e. if your plugin
-// comes before the plugin you are checking; it will not be there (yet).
-func (pc PBConfig) Handlers() []plugin.Prober {
-	if pc.registry == nil {
-		return nil
-	}
-	hs := make([]plugin.Prober, 0, len(pc.registry))
-	for k := range pc.registry {
-		hs = append(hs, pc.registry[k])
-	}
-	return hs
-}
-
-//func (p *probeContext) validateZonesAndListeningAddresses() error {
-//	//Validate addresses
-//	checker := newOverlapZone()
-//	for _, conf := range p.configs {
-//		for _, h := range conf.ListenHosts {
-//			// Validate the overlapping of ZoneAddr
-//			akey := addr{Transport: conf.Transport, Address: h, Port: conf.Port}
-//			var existZone, overlapZone *addr
-//			if len(conf.FilterFuncs) > 0 {
-//				// This config has filters. Check for overlap with other (unfiltered) configs.
-//				existZone, overlapZone = checker.check(akey)
-//			} else {
-//				// This config has no filters. Check for overlap with other (unfiltered) configs,
-//				// and register the zone to prevent subsequent zones from overlapping with it.
-//				existZone, overlapZone = checker.registerAndCheck(akey)
-//			}
-//			if existZone != nil {
-//				return fmt.Errorf("cannot serve %s - it is already defined", akey.String())
-//			}
-//			if overlapZone != nil {
-//				return fmt.Errorf("cannot serve %s - zone overlap listener capacity with %v", akey.String(), overlapZone.String())
-//			}
-//		}
-//	}
-//	return nil
-//}
 
 // groupConfigsByListenPort 建立监听端口和配置文件之间的映射，与服务端不同的是，一个监听地址端口只对应一个配置文件
-func groupConfigsByListenPort(configs []*PBConfig) (map[string]*PBConfig, error) {
-	groups := make(map[string]*PBConfig)
+func groupConfigsByListenPort(configs []*prober.PBConfig) (map[string]*prober.PBConfig, error) {
+	groups := make(map[string]*prober.PBConfig)
 	for _, conf := range configs {
 		for _, h := range conf.ListenHosts {
 			tcpaddr, err := net.ResolveTCPAddr("tcp", net.JoinHostPort(h, conf.Port))

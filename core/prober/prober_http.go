@@ -59,7 +59,7 @@ func (l *loggerAdapter) Write(p []byte) (n int, err error) {
 type HTTPRequestKey struct{}
 
 // NewProberHTTP returns a new ohmydns prober(可用HTTP调用参数) and compiles all plugins in to it.
-func NewProberHTTP(addr string, conf *PBConfig) (*ProberHTTP, error) {
+func NewProberHTTP(addr string, conf *prober.PBConfig) (*ProberHTTP, error) {
 	s, err := NewServer(addr, conf)
 	if err != nil {
 		return nil, err
@@ -101,7 +101,7 @@ func (p *ProberHTTP) Serve(l net.Listener) error {
 }
 
 // ServePacket implements caddy.UDPServer interface.
-func (p *ProberHTTP) ServePacket(pc net.PacketConn) error { return nil }
+func (p *ProberHTTP) ServePacket(net.PacketConn) error { return nil }
 
 // Listen implements caddy.TCPServer interface.
 func (p *ProberHTTP) Listen() (net.Listener, error) {
@@ -228,7 +228,7 @@ func (p *ProberHTTP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 
 			// 无参数指定则停止所有探测任务
-			for pid, _ := range p.proberlist.Pl {
+			for pid := range p.proberlist.Pl {
 				err := p.proberlist.DeleteProberById(pid)
 				if err != nil {
 					return
