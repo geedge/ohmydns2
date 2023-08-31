@@ -57,7 +57,7 @@ func (a Atk) Response(msg *dns.Msg, iptype int) *dns.Msg {
 			rec := new(dns.NS)
 			rec.Hdr = dns.RR_Header{Class: dns.ClassINET, Ttl: 10, Rrtype: dns.TypeNS}
 			rec.Hdr.Name = msg.Question[0].Name
-			ns := strings.ToLower(randstr.RandomAlphanumeric(10)) + "." + a.zoneip6 + "."
+			ns := strings.ToLower(randstr.RandomAlphanumeric(10)) + "." + a.zoneip6
 			log.Infof("生成NS:  %v", ns)
 			rec.Ns = ns
 			msg.Ns = append(msg.Ns, rec)
