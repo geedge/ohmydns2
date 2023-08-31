@@ -24,8 +24,10 @@ func (a Atk) ServeDNS(_ context.Context, w dns.ResponseWriter, r *dns.Msg) (int,
 	msg := new(dns.Msg)
 	msg.SetReply(r)
 	msg.Authoritative = true
+	// 应对0x20
+	qname := strings.ToLower(state.QName())
 	// 请求的源地址
-	switch a.validRequest(state.QName()) {
+	switch a.validRequest(qname) {
 	case 0:
 		//	放大
 		log.Infof("%v 查询 %v, 准备放大", state.IP(), state.Name())
@@ -37,6 +39,7 @@ func (a Atk) ServeDNS(_ context.Context, w dns.ResponseWriter, r *dns.Msg) (int,
 		msg = a.Response(msg, 1)
 	case 2:
 		//其他请求不响应
+		log.Infof("%v 意外查询 %v", state.IP(), state.Name())
 		return 0, nil
 	}
 
