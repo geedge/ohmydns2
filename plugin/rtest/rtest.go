@@ -27,7 +27,7 @@ func (r Rtest) ServeDNS(ctx context.Context, writer dns.ResponseWriter, msg *dns
 	q := strings.ToLower(state.QName())
 	qlist := strings.Split(q, ".")
 	// 符合要求的域名
-	if len(qlist) >= 4 {
+	if len(qlist) >= 5 && strings.ContainsAny(qlist[len(qlist)-5], "-") {
 		// 1.入口
 		iaddr := strings.ReplaceAll(qlist[len(qlist)-5], "-", ":")
 		// 2.出口
