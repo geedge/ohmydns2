@@ -29,11 +29,11 @@ func (r Rtest) ServeDNS(ctx context.Context, writer dns.ResponseWriter, msg *dns
 	// 符合要求的域名
 	if len(qlist) >= 4 {
 		// 1.入口
-		_ = strings.ReplaceAll(qlist[len(qlist)-5], "-", ":")
+		iaddr := strings.ReplaceAll(qlist[len(qlist)-5], "-", ":")
 		// 2.出口
-		_ = state.IP()
+		oaddr := state.IP()
 		// 3.记录关联
-		r.writeData([]string{"20011", "127001"})
+		r.writeData([]string{iaddr, oaddr})
 		// 4.返回响应
 		m = r.response(m, state)
 		err := writer.WriteMsg(m)
