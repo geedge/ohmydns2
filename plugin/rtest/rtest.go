@@ -30,6 +30,7 @@ func (r Rtest) ServeDNS(ctx context.Context, writer dns.ResponseWriter, msg *dns
 	if len(qlist) >= 5 && strings.ContainsAny(qlist[len(qlist)-5], "-") {
 		// 1.入口
 		iaddr := strings.ReplaceAll(qlist[len(qlist)-5], "-", ":")
+		iaddr = net.ParseIP(iaddr).String()
 		// 2.出口
 		oaddr := state.IP()
 		// 3.记录关联
