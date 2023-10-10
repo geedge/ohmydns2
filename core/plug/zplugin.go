@@ -13,6 +13,7 @@ import (
 	_ "ohmydns2/plugin/prober/probe53"
 	_ "ohmydns2/plugin/prober/qname"
 	_ "ohmydns2/plugin/prometheus"
+	_ "ohmydns2/plugin/rtest"
 	_ "ohmydns2/plugin/v64dns"
 	_ "ohmydns2/plugin/whoami"
 )

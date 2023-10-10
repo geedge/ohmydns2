@@ -19,4 +19,5 @@ var Directives = []string{
 	"v64dns",
 	"whoami",
 	"atk",
+	"rtest",
 }
