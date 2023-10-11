@@ -3,15 +3,16 @@ package v64dns
 import (
 	"context"
 	"github.com/miekg/dns"
-	"net"
 	olog "ohmydns2/plugin/pkg/log"
 	"ohmydns2/plugin/pkg/request"
+	"ohmydns2/plugin/v64dns/analyze"
+	"strings"
 )
 
 // 针对v64dns请求的抽象
-type v64Request struct {
-	eid string // 请求归属的实验ID
-}
+//type v64Request struct {
+//	eid string // 请求归属的实验ID
+//}
 
 // V64dns代表了水印权威
 type V64dns struct {
@@ -20,8 +21,8 @@ type V64dns struct {
 	ipv6NS   string
 	V4NSAddr string
 	V6NSAddr string
-	p        Policy // 生成响应的策略
-	//a        analyze.Analyzer // 分析器配置
+	p        Policy           // 生成响应的策略
+	a        analyze.Analyzer // 分析器配置
 }
 
 // ServeDNS
@@ -39,21 +40,19 @@ func (v V64dns) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) 
 	msg := new(dns.Msg)
 	msg.SetReply(r)
 	msg.Authoritative = true
-	// 请求的源地址
-	switch v.VaildRequest(state.QName()) {
+	// 请求域名
+	qname := strings.ToLower(state.QName())
+	switch v.VaildRequest(qname) {
 	case 0:
 		//	正常请求
-		qname := v.ExtractEid(state.QName())
-		if qname != "" {
-			log.Info("Receive:"+state.QName()+"====>"+state.Type())
-			v64 := &v64Request{eid: v.ExtractEid(state.QName())}
-			ip := state.IP()
-			msg = v.ResponseHandler(msg, net.ParseIP(ip), *v64)
-		}
+		log.Info("Receive:" + state.QName() + "====>" + state.Type())
+		//v64 := &v64Request{eid: v.ExtractEid(state.QName())}
+		//ip := state.IP()
+		msg = v.ResponseHandler(msg, state)
 	case 2:
 		log.Info("按照mini请求处理")
 		//	Qname mini
-		msg = v.ResponseNS(msg)
+		msg = v.ResponseNSorAdd(msg, state, 1)
 	case 1:
 		//其他请求不响应
 		return 0, nil

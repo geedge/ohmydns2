@@ -16,15 +16,16 @@ func (v V64dns) VaildRequest(d string) int {
 	if strings.Contains(d, v.zone) {
 		//判断是否有解析进度,含有c且长度为2认为存在标识
 		if strings.Contains(ds[0], "c") && len(ds[0]) == 2 {
-			p, err := strconv.Atoi(strings.Split(ds[0], "")[1])
-			if err != nil {
-				print(err)
-				return 1
-			}
+			return 0
+			//p, err := strconv.Atoi(strings.Split(ds[0], "")[1])
+			//if err != nil {
+			//	print(err)
+			//	return 1
+			//}
 			//长度也一致
-			if p == len(ds)-6 {
-				return 0
-			}
+			//if p == len(ds)-6 {
+			//	return 0
+			//}
 		}
 		//不存在解析进度，则可能为Qname最小化的请求，返回2
 		return 2
@@ -86,13 +87,13 @@ func (v *V64dns) AdditionalInfo(d *dns.Msg, iptype int) (*dns.Msg, error) {
 //	@Description: 将IP链转为文本描述，格式为ip1+ip2+ip3
 //	@receiver e
 //	@return string
-func (e expobject) IPchain2Str() []string {
-	s := []string{}
-	for _, ip := range e.chain {
-		s = append(s, ip.String())
-	}
-	return s
-}
+//func (e expobject) IPchain2Str() []string {
+//	s := []string{}
+//	for _, ip := range e.chain {
+//		s = append(s, ip.String())
+//	}
+//	return s
+//}
 
 // 根据各级域名特征判断其类型，0为zone，1为水印部分，2为v4/v6子域名，3为随机数，4为进度标识，5为实验对象
 func (v V64dns) MatchType(s string) int {
@@ -117,9 +118,9 @@ func (v V64dns) MatchType(s string) int {
 }
 
 // 切换域名
-func (v V64dns) changeSubDomain(s string, changeFlag bool) string {
+func (v V64dns) changeSubDomain(s string) string {
 	// 切换标志位为false，直接返回原域名
-	if !changeFlag {
+	if !v.p.dmChange {
 		return s
 	}
 	switch s {
@@ -140,9 +141,9 @@ func nextProgress(s string) string {
 	return string(s[0]) + strconv.Itoa(n)
 }
 
-// 封装函数，同时添加权威信息和胶水记录，根据子域名切换
-func (v V64dns) SetAuthAdd(res *dns.Msg, subdomain string) *dns.Msg {
-	if subdomain == v.p.v6subdomain {
+// 封装函数，同时添加权威信息和胶水记录，根据子域名切换，domainType=6 or 4
+func (v V64dns) SetAuthAdd(res *dns.Msg, domaintype int) *dns.Msg {
+	if domaintype == 6 {
 		res, _ = v.AdditionalInfo(res, v6)
 		res, _ = v.AuthInfo(res, v6)
 	} else {
@@ -162,8 +163,8 @@ func (v V64dns) ExtractEid(qname string) string {
 	return ""
 }
 
-func ip2id(ip net.IP) string {
-	i := ip.String()
+func ip2id(ip string) string {
+	i := ip
 	if strings.Contains(i, ".") {
 		return strings.ReplaceAll(i, ".", "-")
 	} else {

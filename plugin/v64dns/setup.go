@@ -88,8 +88,8 @@ func parseArg(c *caddy.Controller) (*V64dns, error) {
 		break
 	}
 	// 监控停止信号
-	go EL.Stop()
-	log.Infof("v64权威服务器启动, 工作参数为 Zone:%v, NS4:%v, NS6:%v, IPv4子域:%v, IPv6子域:%v", v.zone, v.ipv4NS, v.ipv6NS, v.p.v4subdomain, v.p.v6subdomain)
+	//go EL.Stop()
+	log.Infof("v64权威服务器启动, 工作参数为 \n Zone:%v, NS4:%v, NS6:%v, IPv4子域:%v, IPv6子域:%v", v.zone, v.ipv4NS, v.ipv6NS, v.p.v4subdomain, v.p.v6subdomain)
 	log.Infof("测试样例: " + prober.MakeTestProbev64(v.p.v4subdomain, v.zone))
 	return v, nil
 }
