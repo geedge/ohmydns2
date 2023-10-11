@@ -120,9 +120,9 @@ func (v V64dns) ResponseCNAME(msg *dns.Msg, state request.Request) *dns.Msg {
 			msg = v.SetAuthAdd(msg, 6)
 		}
 		iaddr = net.ParseIP(iaddr).String()
-		//oaddr := state.IP()
+		oaddr := state.IP()
 		// 调用Python脚本
-		//go v.a.Go2py([]string{iaddr, oaddr})
+		go v.a.Go2py([]string{iaddr, oaddr})
 	}
 
 	answer := new(dns.CNAME)
