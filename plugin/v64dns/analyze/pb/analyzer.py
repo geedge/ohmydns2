@@ -1,13 +1,13 @@
 # !coding=utf-8
+import datetime
 import logging
 import time
 from concurrent import futures
 
 import grpc
-# from py2neo import Graph, Node, Relationship, Subgraph
-# from py2neo import NodeMatcher, RelationshipMatcher
+import pytz
 from neomodel import db, StringProperty, DateTimeFormatProperty, RelationshipTo, StructuredRel, IntegerProperty, \
-    StructuredNode
+    StructuredNode, config
 
 import analyze_pb2
 import analyze_pb2_grpc
@@ -39,7 +39,8 @@ class node:
         self.AS = aul.filterNull(record.get('asnumber', b'').decode("utf-8"))
         self.couCode = aul.filterNull(record.get('areacode', b'').decode("utf-8"))
         self.cou = aul.filterNull(record.get('country', b'').decode("utf-8"))
-        self.FindTime = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
+        # self.FindTime = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
+        self.FindTime = datetime.datetime.now(pytz.UTC)
 
 
 # 与go之间的通信
@@ -55,6 +56,7 @@ class RequestServe(analyze_pb2_grpc.GrpcServiceServicer):
         :return:
         '''
         r = request
+        print("receive R!!")
         if r.gtype == "neo4j":
             if self.graph_conn == "":
                 url = str(r.guri).split("//")[0] + "//" + r.guser + ":" + r.gpass + "@" + str(r.guri).split("//")[1]
@@ -87,7 +89,8 @@ def serve():
 
 
 class RelResolver53(StructuredRel):
-    w = IntegerProperty()
+    W = IntegerProperty()
+    LTIME = DateTimeFormatProperty(default_now=True, format="%Y-%m-%d %H:%M:%S")
 
 
 class NodeResolver53(StructuredNode):
@@ -102,6 +105,7 @@ class NodeResolver53(StructuredNode):
     IPType = StringProperty()
     FTIME = DateTimeFormatProperty(format="%Y-%m-%d %H:%M:%S")
     LTIME = DateTimeFormatProperty(default_now=True, format="%Y-%m-%d %H:%M:%S")
+    W = IntegerProperty()
     LINK = RelationshipTo("NodeResolver53", "IP_LINK", model=RelResolver53)
 
 
@@ -113,41 +117,48 @@ class neo4j_connector:
 
     def __init__(self, url):
         # 连接neo4j
+        config.ENCRYPTED = True
         db.set_connection(url)
         # self.graph = Graph(guri, auth=(guser, gpass), name="neo4j")
         # self.nodematcher = NodeMatcher(self.graph)
         # self.relatmatcher = RelationshipMatcher(self.graph)
 
     def work_with_neoj_53(self, data):
-        nodes = []
-        relates = []
         for d in data:
+            print(d)
             n = node(d)
             # 查询是否存在节点
-            n, exist = self.checknode_neo4j(n.ip)
+            nd, exist = self.checknode_neo4j(n.ip)
+            print(n.AS)
             # 不存在则新建
             if not exist:
                 NodeResolver53(AS=n.AS, COU=n.cou,
                                CCODE=n.couCode, LAT=n.lat, LNG=n.lng,
-                               ISP=n.isp, IPtype=aul.IP46(n.ip), PROV=n.prov, FTIME=n.FindTime,
+                               ISP=n.isp, IPType=aul.IP46(n.ip), PROV=n.prov, FTIME=n.FindTime,
                                LTIME=n.FindTime, IP=n.ip, W=1).save()
             # 存在则只修改时间
             else:
-                n.LTIME = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
-                n.W += 1
-                n.save()
+                # nd.LTIME = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
+                nd.LTIME = datetime.datetime.now(pytz.UTC)
+                if nd.W is not None:
+                    nd.W += 1
+                else:
+                    nd.W = 1
+                nd.save()
 
-        for i in range(len(data) - 1):
-            # 查询是否存在关系
-            L, l = self.checklink_neo4j(nodes[i], nodes[i + 1])
-            if l == 0:
-                pass
-                # relates.append(
-                #     Relationship(nodes[i], 'IP_link', nodes[i + 1], TIME=time.time(), LTIME=time.time(), W=1))
-            else:
-                L["W"] += 1
-                L["LTIME"] = time.time()
-                relates.append(L)
+        # 查询是否存在关系
+        L, lexist = self.checklink_neo4j(data[0], data[1])
+        # 不存在则建立关联
+        if not lexist:
+            L[0].LINK.connect(L[1], {'W': 1, 'LTIME': datetime.datetime.now(pytz.UTC)}).save()
+            # relates.append(
+            #     Relationship(nodes[i], 'IP_link', nodes[i + 1], TIME=time.time(), LTIME=time.time(), W=1))
+        # 存在则修改权重
+        else:
+            L.W += 1
+            # L.LTIME = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
+            L.LTIME = datetime.datetime.now(pytz.UTC)
+            L.save()
         # 提交链接
         return "success"
 
@@ -161,9 +172,9 @@ class neo4j_connector:
         f = NodeResolver53.nodes.get_or_none(IP=ip_from)
         t = NodeResolver53.nodes.get_or_none(IP=ip_to)
         rel = f.LINK.relationship(t)
-        if f is not None:
+        if rel is not None:
             return rel, True
-        return None, False
+        return [f, t], False
 
 
 if __name__ == '__main__':

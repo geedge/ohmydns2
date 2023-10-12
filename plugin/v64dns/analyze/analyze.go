@@ -87,12 +87,14 @@ func (a Analyzer) Go2py(i []string) {
 		Gpass: a.GraphPass,
 		Data:  i,
 	})
-	// 处理不成功则显示警告信息
-	if r.Res != "success" {
-		olog.Warning(r.Res)
-	}
 	if err != nil {
 		olog.Errorf("调用解析链分析器代码失败: %s", err)
 		return
 	}
+	print(r)
+	// 处理不成功则显示警告信息
+	if r.Res != "success" {
+		olog.Warning(r.Res)
+	}
+
 }

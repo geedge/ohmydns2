@@ -1,7 +1,5 @@
 # analyzeutl 是分析器工具集合
 import awdb
-import logging
-import os
 
 
 # 过滤所有空值
@@ -19,9 +17,9 @@ def IP46(IP: str):
     return "Unknown"
 
 
-path_ip4app = "../data/inforDB/data/db/IP_scene_all_cn.awdb"
-path_ip6 = "../data/inforDB/data/db/IP_city_single_BD09_WGS84_ipv6_en.awdb"
-path_ip4qvxian = "../data/inforDB/data/db/IP_basic_single_WGS84_en.awdb"
+path_ip4app = "./data/IP_scene_all_cn.awdb"
+path_ip6 = "./data/IP_city_single_BD09_WGS84_ipv6_en.awdb"
+path_ip4qvxian = "./data/IP_basic_single_WGS84_en.awdb"
 
 
 # 实例化数据读取器
