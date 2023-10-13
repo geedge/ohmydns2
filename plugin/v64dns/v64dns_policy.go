@@ -59,9 +59,9 @@ func (v V64dns) ResponseTXT(msg *dns.Msg, state request.Request) *dns.Msg {
 	answer.Hdr = dns.RR_Header{Name: qname, Ttl: 3600, Class: dns.ClassINET, Rrtype: dns.TypeTXT}
 
 	if sub == v.p.v4subdomain {
-		msg = v.SetAuthAdd(msg, 4)
+		msg = v.SetAuthAdd(msg, state, 4)
 	} else {
-		msg = v.SetAuthAdd(msg, 6)
+		msg = v.SetAuthAdd(msg, state, 6)
 	}
 
 	msg.Answer = append(msg.Answer, answer)
@@ -87,10 +87,10 @@ func (v V64dns) ResponseNSorAdd(msg *dns.Msg, state request.Request, flag int) *
 
 	if strings.ContainsAny(qname, v.p.v6domain) {
 		answer.Ns = v.ipv6NS
-		msg = v.SetAuthAdd(msg, 6)
+		msg = v.SetAuthAdd(msg, state, 6)
 	} else {
 		answer.Ns = v.ipv4NS
-		msg = v.SetAuthAdd(msg, 4)
+		msg = v.SetAuthAdd(msg, state, 4)
 	}
 
 	if flag == 0 {
@@ -114,10 +114,10 @@ func (v V64dns) ResponseCNAME(msg *dns.Msg, state request.Request) *dns.Msg {
 		// 首部编码如果长度为4则为IPv6地址编码，否则为IPv4的
 		if len(cList[0]) == 4 {
 			iaddr = strings.ReplaceAll(dSlice[len(dSlice)-4], "-", ":")
-			msg = v.SetAuthAdd(msg, 4)
+			msg = v.SetAuthAdd(msg, state, 4)
 		} else {
 			iaddr = strings.ReplaceAll(dSlice[len(dSlice)-4], "-", ".")
-			msg = v.SetAuthAdd(msg, 6)
+			msg = v.SetAuthAdd(msg, state, 6)
 		}
 		iaddr = net.ParseIP(iaddr).String()
 		oaddr := state.IP()

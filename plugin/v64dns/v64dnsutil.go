@@ -2,6 +2,7 @@ package v64dns
 
 import (
 	"net"
+	"ohmydns2/plugin/pkg/request"
 	"strconv"
 	"strings"
 
@@ -64,36 +65,25 @@ func (v *V64dns) AuthInfo(d *dns.Msg, iptype int) (*dns.Msg, error) {
 //	@param iptype IP类型，0代表v6，1代表v4
 //	@return *dns.Msg
 //	@return error
-func (v *V64dns) AdditionalInfo(d *dns.Msg, iptype int) (*dns.Msg, error) {
+func (v *V64dns) AdditionalInfo(d *dns.Msg, state request.Request, iptype int) (*dns.Msg, error) {
 	// 根据不同的NS返回额外信息
 	if iptype == 0 {
 		dnsadd := new(dns.AAAA)
 		dnsadd.Hdr = dns.RR_Header{Name: v.ipv6NS, Ttl: 3600, Class: dns.ClassINET, Rrtype: dns.TypeAAAA}
-		a, _, _ := net.ParseCIDR(v.V6NSAddr + "/64")
+		//a, _, _ := net.ParseCIDR(v.V6NSAddr + "/64")
+		a := net.ParseIP(state.LocalIP())
 		dnsadd.AAAA = a.To16()
 		d.Extra = append(d.Extra, dnsadd)
 	} else {
 		dnsadd := new(dns.A)
 		dnsadd.Hdr = dns.RR_Header{Name: v.ipv4NS, Ttl: 3600, Class: dns.ClassINET, Rrtype: dns.TypeA}
-		a, _, _ := net.ParseCIDR(v.V4NSAddr + "/24")
+		//a, _, _ := net.ParseCIDR(v.V4NSAddr + "/24")
+		a := net.ParseIP(state.LocalIP())
 		dnsadd.A = a.To4()
 		d.Extra = append(d.Extra, dnsadd)
 	}
 	return d, nil
 }
-
-// IPchain2Str
-//
-//	@Description: 将IP链转为文本描述，格式为ip1+ip2+ip3
-//	@receiver e
-//	@return string
-//func (e expobject) IPchain2Str() []string {
-//	s := []string{}
-//	for _, ip := range e.chain {
-//		s = append(s, ip.String())
-//	}
-//	return s
-//}
 
 // 根据各级域名特征判断其类型，0为zone，1为水印部分，2为v4/v6子域名，3为随机数，4为进度标识，5为实验对象
 func (v V64dns) MatchType(s string) int {
@@ -142,12 +132,12 @@ func nextProgress(s string) string {
 }
 
 // 封装函数，同时添加权威信息和胶水记录，根据子域名切换，domainType=6 or 4
-func (v V64dns) SetAuthAdd(res *dns.Msg, domaintype int) *dns.Msg {
+func (v V64dns) SetAuthAdd(res *dns.Msg, state request.Request, domaintype int) *dns.Msg {
 	if domaintype == 6 {
-		res, _ = v.AdditionalInfo(res, v6)
+		res, _ = v.AdditionalInfo(res, state, v6)
 		res, _ = v.AuthInfo(res, v6)
 	} else {
-		res, _ = v.AdditionalInfo(res, v4)
+		res, _ = v.AdditionalInfo(res, state, v4)
 		res, _ = v.AuthInfo(res, v4)
 	}
 	return res
