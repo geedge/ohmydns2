@@ -28,8 +28,8 @@ var (
 	lck sync.Mutex
 )
 
-func NewAnalyzer(gtype, guri, guser, gpass string) error {
-	A = Analyzer{
+func NewAnalyzer(gtype, guri, guser, gpass string) (*Analyzer, error) {
+	B := Analyzer{
 		Graphtype:  gtype,
 		Graphuri:   guri,
 		GraphUser:  guser,
@@ -37,13 +37,13 @@ func NewAnalyzer(gtype, guri, guser, gpass string) error {
 		IsA:        true,
 		grpcClient: nil,
 	}
-	conn, err := A.GetConn("127.0.0.1:56789")
+	conn, err := B.GetConn("127.0.0.1:56789")
 	if err != nil {
 		olog.Errorf("GetGrpcClient:%s", err.Error())
 		panic("error")
 	}
-	A.grpcClient = pb.NewGrpcServiceClient(conn)
-	return nil
+	B.grpcClient = pb.NewGrpcServiceClient(conn)
+	return &B, nil
 }
 
 func (a Analyzer) GetConn(target string) (*grpc.ClientConn, error) {
@@ -78,7 +78,6 @@ func newGrpcConn(target string) (*grpc.ClientConn, error) {
 
 // 远程调用Python脚本方法
 func (a Analyzer) Go2py(i []string) {
-
 	// 调用服务端函数
 	r, err := a.grpcClient.AnalyzeService(context.Background(), &pb.DnsChain{
 		Gtype: a.Graphtype,
@@ -88,10 +87,10 @@ func (a Analyzer) Go2py(i []string) {
 		Data:  i,
 	})
 	if err != nil {
+		print(r)
 		olog.Errorf("调用解析链分析器代码失败: %s", err)
 		return
 	}
-	print(r)
 	// 处理不成功则显示警告信息
 	if r.Res != "success" {
 		olog.Warning(r.Res)

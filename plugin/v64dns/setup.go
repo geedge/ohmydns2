@@ -79,10 +79,11 @@ func parseArg(c *caddy.Controller) (*V64dns, error) {
 					log.Error("analyze参数错误，请检查")
 				}
 				//创建Analyzer对象
-				err := analyze.NewAnalyzer(args[0], args[1], args[2], args[3])
+				a, err := analyze.NewAnalyzer(args[0], args[1], args[2], args[3])
 				if err != nil {
 					return nil, err
 				}
+				v.a = a
 			}
 		}
 		break

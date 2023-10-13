@@ -27,7 +27,7 @@ COPY plugin/v64dns/analyze/pb/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt;\
     mkdir config;\
     mkdir data;\
-    ln -s plugin/v64dns/analyze/data data;
+    ln -s plugin/v64dns/analyze/pb/data data;
 # 不要使用ENTRYPOINT，否则CMD会被当作参数执行
 CMD /bin/bash -c "source ./start.sh"
 

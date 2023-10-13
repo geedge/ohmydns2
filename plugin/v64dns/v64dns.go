@@ -21,8 +21,8 @@ type V64dns struct {
 	ipv6NS   string
 	V4NSAddr string
 	V6NSAddr string
-	p        Policy           // 生成响应的策略
-	a        analyze.Analyzer // 分析器配置
+	p        Policy            // 生成响应的策略
+	a        *analyze.Analyzer // 分析器配置
 }
 
 // ServeDNS
