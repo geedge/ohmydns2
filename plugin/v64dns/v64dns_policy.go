@@ -113,10 +113,10 @@ func (v V64dns) ResponseCNAME(msg *dns.Msg, state request.Request) *dns.Msg {
 		iaddr := ""
 		// 首部编码如果长度为4则为IPv6地址编码，否则为IPv4的
 		if len(cList[0]) == 4 {
-			iaddr = strings.ReplaceAll(dSlice[len(dSlice)-5], "-", ":")
+			iaddr = strings.ReplaceAll(dSlice[len(dSlice)-6], "-", ":")
 			msg = v.SetAuthAdd(msg, state, 4)
 		} else {
-			iaddr = strings.ReplaceAll(dSlice[len(dSlice)-5], "-", ".")
+			iaddr = strings.ReplaceAll(dSlice[len(dSlice)-6], "-", ".")
 			msg = v.SetAuthAdd(msg, state, 6)
 		}
 		iaddr = net.ParseIP(iaddr).String()
@@ -137,10 +137,11 @@ func (v V64dns) ResponseCNAME(msg *dns.Msg, state request.Request) *dns.Msg {
 	// 实验进度+1
 	answer.Target += nextProgress(dSlice[0]) + "."
 	// 内容填充
-	for _, i := range dSlice[1 : len(dSlice)-4] {
+	for _, i := range dSlice[1 : len(dSlice)-5] {
 		answer.Target += i + "."
 	}
 	answer.Target += ip2id(state.IP()) + "."
+	answer.Target += dSlice[len(dSlice)-5] + "."
 	answer.Target += v.changeSubDomain(dSlice[len(dSlice)-4]) + "."
 	for _, i := range dSlice[len(dSlice)-3 : len(dSlice)-1] {
 		answer.Target += i + "."

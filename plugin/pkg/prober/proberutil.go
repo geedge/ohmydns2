@@ -66,7 +66,7 @@ func MakeProbev64(ip net.IP) string {
 
 func MakeTestProbev64(subv64 string, targetzone string) string {
 	ipstr := ip2Eid(net.ParseIP("0.0.0.0"))
-	return fmt.Sprintf("c1.rip%v.%v.%v.%v", ipstr, strings.ToLower(randstr.RandomAlphanumeric(5)), subv64, targetzone)
+	return fmt.Sprintf("c1.%v.%v.%v.%v", ipstr, strings.ToLower(randstr.RandomAlphanumeric(5)), subv64, targetzone)
 }
 
 func ip2Eid(ip net.IP) string {
