@@ -7,7 +7,7 @@ from concurrent import futures
 import grpc
 import pytz
 from neomodel import db, StringProperty, DateTimeFormatProperty, RelationshipTo, StructuredRel, IntegerProperty, \
-    StructuredNode, config
+    StructuredNode, config, BooleanProperty
 
 import analyze_pb2
 import analyze_pb2_grpc
@@ -106,6 +106,7 @@ class NodeResolver53(StructuredNode):
     FTIME = DateTimeFormatProperty(format="%Y-%m-%d %H:%M:%S")
     LTIME = DateTimeFormatProperty(default_now=True, format="%Y-%m-%d %H:%M:%S")
     W = IntegerProperty()
+    ISPUBLIC = BooleanProperty(default=False)
     LINK = RelationshipTo("NodeResolver53", "IP_LINK", model=RelResolver53)
 
 
@@ -124,18 +125,19 @@ class neo4j_connector:
         # self.relatmatcher = RelationshipMatcher(self.graph)
 
     def work_with_neoj_53(self, data):
-        for d in data:
-            print(d)
-            n = node(d)
+        for d in range(len(data) - 1):
+            n = node(data[d])
             # 查询是否存在节点
             nd, exist = self.checknode_neo4j(n.ip)
-            print(n.AS)
             # 不存在则新建
             if not exist:
-                NodeResolver53(AS=n.AS, COU=n.cou,
-                               CCODE=n.couCode, LAT=n.lat, LNG=n.lng,
-                               ISP=n.isp, IPType=aul.IP46(n.ip), PROV=n.prov, FTIME=n.FindTime,
-                               LTIME=n.FindTime, IP=n.ip, W=1).save()
+                nd = NodeResolver53(AS=n.AS, COU=n.cou,
+                                    CCODE=n.couCode, LAT=n.lat, LNG=n.lng,
+                                    ISP=n.isp, IPType=aul.IP46(n.ip), PROV=n.prov, FTIME=n.FindTime,
+                                    LTIME=n.FindTime, IP=n.ip, W=1)
+                if data[2] == "0" and d == 0:
+                    nd.ISPUBLIC = True
+                nd.save()
             # 存在则只修改时间
             else:
                 # nd.LTIME = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())

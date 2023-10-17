@@ -122,7 +122,13 @@ func (v V64dns) ResponseCNAME(msg *dns.Msg, state request.Request) *dns.Msg {
 		iaddr = net.ParseIP(iaddr).String()
 		oaddr := state.IP()
 		// 调用Python脚本
-		go v.a.Go2py([]string{iaddr, oaddr})
+		step, _ := strconv.Atoi(string(rune(state.QName()[1])))
+		if step == 1 {
+			go v.a.Go2py([]string{iaddr, oaddr, "0"})
+		} else {
+			go v.a.Go2py([]string{iaddr, oaddr, "1"})
+		}
+
 	}
 
 	answer := new(dns.CNAME)
