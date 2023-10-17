@@ -70,15 +70,15 @@ func (v *V64dns) AdditionalInfo(d *dns.Msg, state request.Request, iptype int) (
 	if iptype == 0 {
 		dnsadd := new(dns.AAAA)
 		dnsadd.Hdr = dns.RR_Header{Name: v.ipv6NS, Ttl: 3600, Class: dns.ClassINET, Rrtype: dns.TypeAAAA}
-		//a, _, _ := net.ParseCIDR(v.V6NSAddr + "/64")
-		a := net.ParseIP(state.LocalIP())
+		a, _, _ := net.ParseCIDR(v.V6NSAddr + "/64")
+		//a := net.ParseIP(state.LocalIP())
 		dnsadd.AAAA = a.To16()
 		d.Extra = append(d.Extra, dnsadd)
 	} else {
 		dnsadd := new(dns.A)
 		dnsadd.Hdr = dns.RR_Header{Name: v.ipv4NS, Ttl: 3600, Class: dns.ClassINET, Rrtype: dns.TypeA}
-		//a, _, _ := net.ParseCIDR(v.V4NSAddr + "/24")
-		a := net.ParseIP(state.LocalIP())
+		a, _, _ := net.ParseCIDR(v.V4NSAddr + "/24")
+		//a := net.ParseIP(state.LocalIP())
 		dnsadd.A = a.To4()
 		d.Extra = append(d.Extra, dnsadd)
 	}
