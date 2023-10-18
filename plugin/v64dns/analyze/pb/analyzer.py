@@ -28,10 +28,15 @@ class node:
     lat = ""
     lng = ""
     FindTime = ""
+    dataOK = ""
 
     def __init__(self, ip):
         self.ip = ip
         record = aul.getrecord(ip)
+        if record == 1:
+            self.dataOK = False
+            return
+        self.dataOK = True
         self.isp = aul.filterNull(record.get('isp', b'').decode("utf-8"))
         self.lat = aul.filterNull(record.get('latwgs', b'').decode("utf-8"))
         self.lng = aul.filterNull(record.get('lngwgs', b'').decode("utf-8"))
@@ -130,7 +135,7 @@ class neo4j_connector:
             # 查询是否存在节点
             nd, exist = self.checknode_neo4j(n.ip)
             # 不存在则新建
-            if not exist:
+            if not exist and n.dataOK:
                 nd = NodeResolver53(AS=n.AS, COU=n.cou,
                                     CCODE=n.couCode, LAT=n.lat, LNG=n.lng,
                                     ISP=n.isp, IPType=aul.IP46(n.ip), PROV=n.prov, FTIME=n.FindTime,
@@ -150,6 +155,9 @@ class neo4j_connector:
 
         # 查询是否存在关系
         L, lexist = self.checklink_neo4j(data[0], data[1])
+        # 数据存在问题则退出
+        if L == "Err":
+            return ("node err when link")
         # 不存在则建立关联
         if not lexist:
             L[0].LINK.connect(L[1], {'W': 1, 'LTIME': datetime.datetime.now(pytz.UTC)}).save()
@@ -173,6 +181,8 @@ class neo4j_connector:
     def checklink_neo4j(self, ip_from, ip_to):
         f = NodeResolver53.nodes.get_or_none(IP=ip_from)
         t = NodeResolver53.nodes.get_or_none(IP=ip_to)
+        if f is None or t is None:
+            return "Err", False
         rel = f.LINK.relationship(t)
         if rel is not None:
             return rel, True
