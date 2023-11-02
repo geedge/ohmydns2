@@ -5,53 +5,68 @@ import (
 	"github.com/miekg/dns"
 	"github.com/pochard/commons/randstr"
 	"net"
+	"ohmydns2/plugin/pkg/proxy"
 	"ohmydns2/plugin/pkg/request"
 	"strings"
 )
 
 type Atk struct {
-	magni   int
-	zoneip4 string
-	zoneip6 string
-	ip6NS   string
-	ip4NS   string
-	ip6Addr string
-	ip4Addr string
+	proxies   []*proxy.Proxy
+	serveType string
+	magni     int
+	zoneip4   string
+	zoneip6   string
+	ip6NS     string
+	ip4NS     string
+	ip6Addr   string
+	ip4Addr   string
+	target    string
 }
 
-func (a Atk) ServeDNS(_ context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
+func (a Atk) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
 	state := request.Request{W: w, Req: r}
-	msg := new(dns.Msg)
-	msg.SetReply(r)
-	msg.Authoritative = true
-	// 应对0x20
-	qname := strings.ToLower(state.QName())
-	// 请求的源地址
-	switch a.validRequest(qname) {
-	case 0:
-		//	放大
-		log.Infof("%v 查询 %v, 准备放大", state.IP(), state.Name())
-		msg = a.Response(msg, 0)
+	// 转发器模式
+	if a.serveType == "fdns" {
+		opt := proxy.Options{ForceTCP: false, PreferUDP: true, HCRecursionDesired: true, HCDomain: "."}
+		for i := a.magni; i > 0; i-- {
+			_, _ = a.proxies[0].Connect(ctx, state, opt)
+		}
+		return 0, nil
+	} else {
+		//权威模式
+		msg := new(dns.Msg)
+		msg.SetReply(r)
+		msg.Authoritative = true
+		// 应对0x20
+		qname := strings.ToLower(state.QName())
+		// 请求的源地址
+		switch a.validRequest(qname) {
+		case 0:
+			//	放大
+			log.Infof("%v 查询 %v, 准备放大", state.IP(), state.Name())
+			msg = a.Response(msg, 0)
 
-	case 1:
-		//观察
-		log.Infof("%v 接收到请求: %v ask %v", a.ip6NS, state.IP(), state.Name())
-		msg = a.Response(msg, 1)
-	case -1:
-		log.Infof("%v 接收到被修改的请求(QnameMini): %v ask %v", a.ip6NS, state.IP(), state.Name())
-		msg = a.Response(msg, -1)
-	case 2:
-		//其他请求不响应
-		log.Infof("%v 意外查询 %v", state.IP(), state.Name())
+		case 1:
+			//观察
+			log.Infof("%v 接收到请求: %v ask %v", a.ip6NS, state.IP(), state.Name())
+			msg = a.Response(msg, 1)
+		case -1:
+			log.Infof("%v 接收到被修改的请求(QnameMini): %v ask %v", a.ip6NS, state.IP(), state.Name())
+			msg = a.Response(msg, -1)
+		case 2:
+			//其他请求不响应
+			log.Infof("%v 意外查询 %v", state.IP(), state.Name())
+			return 0, nil
+		}
+
+		err := w.WriteMsg(msg)
+		if err != nil {
+			log.Info(err.Error())
+			return dns.RcodeServerFailure, err
+		}
 		return 0, nil
 	}
 
-	err := w.WriteMsg(msg)
-	if err != nil {
-		log.Info(err.Error())
-		return dns.RcodeServerFailure, err
-	}
-	return 0, nil
 }
 
 func (a Atk) Name() string {

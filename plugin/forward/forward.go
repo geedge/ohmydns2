@@ -4,6 +4,8 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	ot "github.com/opentracing/opentracing-go"
+	otext "github.com/opentracing/opentracing-go/ext"
 	"ohmydns2/plugin"
 	"ohmydns2/plugin/debug"
 	"ohmydns2/plugin/dnstap"
@@ -14,8 +16,6 @@ import (
 	"time"
 
 	"github.com/miekg/dns"
-	ot "github.com/opentracing/opentracing-go"
-	otext "github.com/opentracing/opentracing-go/ext"
 )
 
 var defaultTimeout = 5 * time.Second
@@ -106,9 +106,9 @@ func (f *Forward) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg
 			fails = 0
 		}
 
-		proxy := list[i]
+		pProxy := list[i]
 		i++
-		if proxy.Down(f.maxfails) {
+		if pProxy.Down(f.maxfails) {
 			fails++
 			if fails < len(f.proxies) {
 				continue
@@ -116,19 +116,19 @@ func (f *Forward) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg
 			// All upstream proxies are dead, assume healthcheck is completely broken and randomly
 			// select an upstream to connect to.
 			r := new(random)
-			proxy = r.List(f.proxies)[0]
+			pProxy = r.List(f.proxies)[0]
 
 			HealthcheckBrokenCount.Add(1)
 		}
 
 		if span != nil {
 			child = span.Tracer().StartSpan("connect", ot.ChildOf(span.Context()))
-			otext.PeerAddress.Set(child, proxy.Addr())
+			otext.PeerAddress.Set(child, pProxy.Addr())
 			ctx = ot.ContextWithSpan(ctx, child)
 		}
 
 		metadata.SetValueFunc(ctx, "forward/upstream", func() string {
-			return proxy.Addr()
+			return pProxy.Addr()
 		})
 
 		var (
@@ -138,7 +138,7 @@ func (f *Forward) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg
 		opts := f.opts
 
 		for {
-			ret, err = proxy.Connect(ctx, state, opts)
+			ret, err = pProxy.Connect(ctx, state, opts)
 			if err == ErrCachedClosed { // Remote side closed conn, can only happen with TCP.
 				continue
 			}
@@ -155,7 +155,7 @@ func (f *Forward) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg
 		}
 
 		if len(f.tapPlugins) != 0 {
-			toDnstap(f, proxy.Addr(), state, opts, ret, start)
+			toDnstap(f, pProxy.Addr(), state, opts, ret, start)
 		}
 
 		upstreamErr = err
@@ -163,7 +163,7 @@ func (f *Forward) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg
 		if err != nil {
 			// Kick off health check to see if *our* upstream is broken.
 			if f.maxfails != 0 {
-				proxy.Healthcheck()
+				pProxy.Healthcheck()
 			}
 
 			if fails < len(f.proxies) {

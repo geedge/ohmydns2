@@ -132,10 +132,12 @@ class neo4j_connector:
     def work_with_neoj_53(self, data):
         for d in range(len(data) - 1):
             n = node(data[d])
+            if not n.dataOK:
+                return "node err because ip"
             # 查询是否存在节点
             nd, exist = self.checknode_neo4j(n.ip)
             # 不存在则新建
-            if not exist and n.dataOK:
+            if not exist:
                 nd = NodeResolver53(AS=n.AS, COU=n.cou,
                                     CCODE=n.couCode, LAT=n.lat, LNG=n.lng,
                                     ISP=n.isp, IPType=aul.IP46(n.ip), PROV=n.prov, FTIME=n.FindTime,
@@ -157,7 +159,7 @@ class neo4j_connector:
         L, lexist = self.checklink_neo4j(data[0], data[1])
         # 数据存在问题则退出
         if L == "Err":
-            return ("node err when link")
+            return "node err when link"
         # 不存在则建立关联
         if not lexist:
             L[0].LINK.connect(L[1], {'W': 1, 'LTIME': datetime.datetime.now(pytz.UTC)}).save()

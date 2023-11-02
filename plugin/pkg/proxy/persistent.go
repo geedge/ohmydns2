@@ -29,6 +29,7 @@ type Transport struct {
 }
 
 func newTransport(addr string) *Transport {
+	print(addr)
 	t := &Transport{
 		avgDialTime: int64(maxDialTimeout / 2),
 		conns:       [typeTotalCount][]*persistConn{},
