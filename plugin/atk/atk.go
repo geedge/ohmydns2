@@ -29,7 +29,10 @@ func (a Atk) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (in
 	if a.serveType == "fdns" {
 		opt := proxy.Options{ForceTCP: false, PreferUDP: true, HCRecursionDesired: true, HCDomain: "."}
 		for i := a.magni; i > 0; i-- {
-			_, _ = a.proxies[0].Connect(ctx, state, opt)
+			// 向上游发送查询请求
+			go func() {
+				_, _ = a.proxies[0].Connect(ctx, state, opt)
+			}()
 		}
 		return 0, nil
 	} else {
