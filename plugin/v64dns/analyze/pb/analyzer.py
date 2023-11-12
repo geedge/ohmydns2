@@ -29,6 +29,7 @@ class node:
     lng = ""
     FindTime = ""
     dataOK = ""
+    owner = ""
 
     def __init__(self, ip):
         self.ip = ip
@@ -46,6 +47,7 @@ class node:
         self.cou = aul.filterNull(record.get('country', b'').decode("utf-8"))
         # self.FindTime = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
         self.FindTime = datetime.datetime.now(pytz.UTC)
+        self.owner = aul.filterNull(record.get('owner', b'').decode("utf-8"))
 
 
 # 与go之间的通信
