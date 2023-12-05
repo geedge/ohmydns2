@@ -268,3 +268,8 @@ cython_debug/
 /go_build_ohmydns2_linux
 /bin/
 /Ohmydns2设计文档.md
+ohmydns2
+*.awdb
+plugin/v64dns/analyze/pb/twv6.py
+plugin/v64dns/analyze/pb/53openIPv6.txt
+plugin/v64dns/analyze/pb/TW_v6resolver.txt
