@@ -44,25 +44,31 @@ func (v V64dns) ResponseHandler(msg *dns.Msg, state request.Request) *dns.Msg {
 // ResponseTXT 响应TXT，认为到达最后一步
 func (v V64dns) ResponseTXT(msg *dns.Msg, state request.Request) *dns.Msg {
 	qname := strings.ToLower(state.QName())
-	sub := ""
-	for _, qs := range strings.Split(qname, ".") {
-		switch v.MatchType(qs) {
-		case 2:
-			sub = qs
+
+	// 记录关联关系
+	dSlice := strings.Split(strings.ToLower(qname), ".")
+	if len(dSlice) > 4 {
+		// 将最近一次编码拆分开
+		cList := strings.Split(dSlice[len(dSlice)-5], "-")
+		iaddr := ""
+		// 首部编码如果长度为4则为IPv6地址编码，否则为IPv4的
+		if len(cList[0]) == 4 {
+			iaddr = strings.ReplaceAll(dSlice[len(dSlice)-6], "-", ":")
+			msg = v.SetAuthAdd(msg, state, 4)
+		} else {
+			iaddr = strings.ReplaceAll(dSlice[len(dSlice)-6], "-", ".")
+			msg = v.SetAuthAdd(msg, state, 6)
 		}
+		iaddr = net.ParseIP(iaddr).String()
+		oaddr := state.IP()
+		// 调用Python
+		go v.a.Go2py([]string{iaddr, oaddr, "1"})
+
 	}
-	//ans := EL.l[expid].IPchain2Str()
 
 	answer := new(dns.TXT)
 	answer.Txt = []string{state.QName()}
 	answer.Hdr = dns.RR_Header{Name: state.QName(), Ttl: 3600, Class: dns.ClassINET, Rrtype: dns.TypeTXT}
-
-	if sub == v.p.v4subdomain {
-		msg = v.SetAuthAdd(msg, state, 4)
-	} else {
-		msg = v.SetAuthAdd(msg, state, 6)
-	}
-
 	msg.Answer = append(msg.Answer, answer)
 	return msg
 }
