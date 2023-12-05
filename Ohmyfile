@@ -11,9 +11,7 @@
        chain v4-1 v6-1
        ip-embed
        chain-mlen 4
-       # analyze neo4j http://localhost:7447 neo4j hdk19990815
-       # analyze neo4j neo4j+s://600c8c12.databases.neo4j.io:7687 neo4j 5PvtszWJ7ru4hyBTKO9mGnavOJETTGhJYQIeC5SzmPQ
-       analyze neo4j neo4j://124.221.228.62:7678 neo4j @Hdk19990815
+       analyze neo4j neo4j://124.221.228.62:7678 neo4j Hdk19990815
     }
 }
 

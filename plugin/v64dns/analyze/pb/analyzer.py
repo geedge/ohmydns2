@@ -64,11 +64,14 @@ class RequestServe(analyze_pb2_grpc.GrpcServiceServicer):
         '''
         r = request
         print("receive R!!")
+        print(r)
+        print("ok")
         if r.gtype == "neo4j":
             if self.graph_conn == "":
                 url = str(r.guri).split("//")[0] + "//" + r.guser + ":" + r.gpass + "@" + str(r.guri).split("//")[1]
                 self.graph_conn = neo4j_connector(url)
                 print("已连接到图数据库Neo4j:" + r.guri)
+            print(self.graph_conn)
             result = self.graph_conn.work_with_neoj_53(r.data)
             return analyze_pb2.result(res=result)
         return analyze_pb2.result(res="not support")
@@ -125,7 +128,9 @@ class neo4j_connector:
 
     def __init__(self, url):
         # 连接neo4j
-        config.ENCRYPTED = True
+        #config.ENCRYPTED = True
+        print(url)
+        config.DATABASE_URL =url
         db.set_connection(url)
         # self.graph = Graph(guri, auth=(guser, gpass), name="neo4j")
         # self.nodematcher = NodeMatcher(self.graph)
