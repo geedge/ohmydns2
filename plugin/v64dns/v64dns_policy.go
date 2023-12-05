@@ -25,7 +25,6 @@ func (v V64dns) ResponseHandler(msg *dns.Msg, state request.Request) *dns.Msg {
 
 	// 未到达最后一步
 	if step < v.p.maxLen {
-
 		return v.ResponseCNAME(msg, state)
 	}
 	// 到达最后一步
@@ -56,7 +55,7 @@ func (v V64dns) ResponseTXT(msg *dns.Msg, state request.Request) *dns.Msg {
 
 	answer := new(dns.TXT)
 	answer.Txt = []string{state.QName()}
-	answer.Hdr = dns.RR_Header{Name: qname, Ttl: 3600, Class: dns.ClassINET, Rrtype: dns.TypeTXT}
+	answer.Hdr = dns.RR_Header{Name: state.QName(), Ttl: 3600, Class: dns.ClassINET, Rrtype: dns.TypeTXT}
 
 	if sub == v.p.v4subdomain {
 		msg = v.SetAuthAdd(msg, state, 4)
