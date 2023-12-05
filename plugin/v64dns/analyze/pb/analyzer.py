@@ -65,7 +65,6 @@ class RequestServe(analyze_pb2_grpc.GrpcServiceServicer):
         r = request
         print("receive R!!")
         print(r)
-        print("ok")
         if r.gtype == "neo4j":
             if self.graph_conn == "":
                 url = str(r.guri).split("//")[0] + "//" + r.guser + ":" + r.gpass + "@" + str(r.guri).split("//")[1]

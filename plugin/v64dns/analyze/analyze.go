@@ -78,6 +78,8 @@ func newGrpcConn(target string) (*grpc.ClientConn, error) {
 
 // 远程调用Python脚本方法
 func (a Analyzer) Go2py(i []string) {
+	lck.Lock()
+	defer lck.Unlock()
 	// 调用服务端函数
 	r, err := a.grpcClient.AnalyzeService(context.Background(), &pb.DnsChain{
 		Gtype: a.Graphtype,
