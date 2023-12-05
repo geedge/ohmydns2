@@ -49,8 +49,8 @@ func (v V64dns) ResponseTXT(msg *dns.Msg, state request.Request) *dns.Msg {
 	dSlice := strings.Split(strings.ToLower(qname), ".")
 	if len(dSlice) > 4 {
 		// 将最近一次编码拆分开
-		cList := strings.Split(dSlice[len(dSlice)-5], "-")
-		iaddr := ""
+		cList := strings.Split(dSlice[len(dSlice)-6], "-")
+		iaddr :=""
 		// 首部编码如果长度为4则为IPv6地址编码，否则为IPv4的
 		if len(cList[0]) == 4 {
 			iaddr = strings.ReplaceAll(dSlice[len(dSlice)-6], "-", ":")
@@ -114,7 +114,7 @@ func (v V64dns) ResponseCNAME(msg *dns.Msg, state request.Request) *dns.Msg {
 	dSlice := strings.Split(strings.ToLower(qname), ".")
 	if len(dSlice) > 4 {
 		// 将最近一次编码拆分开
-		cList := strings.Split(dSlice[len(dSlice)-5], "-")
+		cList := strings.Split(dSlice[len(dSlice)-6], "-")
 		iaddr := ""
 		// 首部编码如果长度为4则为IPv6地址编码，否则为IPv4的
 		if len(cList[0]) == 4 {
