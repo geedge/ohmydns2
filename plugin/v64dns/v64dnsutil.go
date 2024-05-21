@@ -18,15 +18,6 @@ func (v V64dns) VaildRequest(d string) int {
 		//判断是否有解析进度,含有c且长度为2认为存在标识
 		if strings.Contains(ds[0], "c") && len(ds[0]) == 2 {
 			return 0
-			//p, err := strconv.Atoi(strings.Split(ds[0], "")[1])
-			//if err != nil {
-			//	print(err)
-			//	return 1
-			//}
-			//长度也一致
-			//if p == len(ds)-6 {
-			//	return 0
-			//}
 		}
 		//不存在解析进度，则可能为Qname最小化的请求，返回2
 		return 2
